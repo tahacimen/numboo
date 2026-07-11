@@ -1,396 +1,642 @@
-# NumDrop — Teknik Gereksinim Dokümanı (Game Spec)
-
-> Bu doküman, NumDrop adlı web tabanlı arcade oyununun bir Android mobil uygulaması (APK) olarak sıfırdan yeniden inşa edilmesi için hazırlanmış eksiksiz bir teknik şartnamedir. Kaynak koda bakılmadan, yalnızca bu dokümana dayanarak oyun bire bir aynı mekanik, denge ve his ile yeniden üretilebilmelidir.
-
----
-
-## 1. Oyun Özeti & Amaç
-
-**Tek cümlelik konsept:** NumDrop, ekranın en alt satırında beliren rakamlar arasından "Sıra" kutusunda gösterilen hedef rakamı hızlıca bulup tıklaman/dokunman gereken, tempolu, tek yanlışın oyunu bitirdiği bir refleks/dikkat oyunudur.
-
-**Hedef kitle:** Kısa oturumlarla (1-3 dakika) oynanabilen, yüksek skor/rekor peşinde koşan, "one more try" hissi veren casual/hyper-casual mobil oyuncular. Tüm yaş grupları için uygun, basit kurallı ama ustalaşması zor bir refleks oyunu.
-
-**Oynanış döngüsü (game loop):**
-1. Oyuncuya bir hedef rakam gösterilir (Sıra kutusundaki ilk eleman).
-2. Oyuncu, 6 sütunluk ızgaranın en alt satırında bu rakamı arar ve bulduğu her hücreye tıklar.
-3. Doğru tıklama: skor kazanılır, süre artar, tıklanan sütun bir aşağı kayar (yeni rastgele rakam üstten girer), combo büyür.
-4. Yanlış tıklama (hedef olmayan herhangi bir rakama basmak, özellikle "yasak rakam"a basmak): oyun **anında** biter.
-5. Hedefin alt satırdaki tüm örnekleri tıklanınca sıradaki hedefe geçilir.
-6. Süre sürekli azalır (bir çubukla gösterilir); süre sıfırlanırsa oyun biter.
-7. Her 5 hedef tamamlandığında level atlanır: oyun hızlanır (süre daha hızlı erir), 1 kalıcı rozet kazanılır, level 2'den itibaren "yasak rakam" mekaniği devreye girer.
-8. Oyun bittiğinde skor gösterilir; oyuncu elindeki rozetlerden birini harcayarak kaldığı yerden (skor/level/grid korunarak, süre dolu) devam edebilir, yeniden başlayabilir veya çıkabilir.
-
----
-
-## 2. Grid & Görsel Yapı
-
-- **Boyut:** `COLS = 6`, `ROWS = 8` (6 sütun, 8 satır).
-- **Koordinat sistemi:** `grid[r][c]` — `r=0` en üst satır, `r=ROWS-1` (7. indeks, yani 8. satır) görünür/tıklanabilir **en alt satır**.
-- **Sadece en alt satır (`r = ROWS-1`) tıklanabilir.** Diğer satırlar sadece görsel, dekoratif "gelecek rakamlar" katmanıdır — dokunma olayı yalnızca alt satır hücrelerine bağlanır.
-- **Kayma (shift) mantığı — `shiftColumn(c)`:**
-  - Tıklanan sütunda, `r = ROWS-1`'den `r = 1`'e kadar her hücre bir üstteki hücrenin değerini alır (`grid[r][c] = grid[r-1][c]`), yani sütun aşağı doğru kayar.
-  - `special[r][c]` (örn. dondurucu işareti) de aynı şekilde bir satır aşağı taşınır.
-  - En üst satıra (`r=0`) yeni rastgele bir rakam (`rnd()`, 0-9 arası) girer, `special[0][c] = null` (yeni giren hücre asla özel değildir).
-  - Sonuç: tıklanan sütun görsel olarak bir satır aşağı "düşer", tepeden yeni bir rakam belirir. Bu, "slide-in" animasyonu ile (bkz. Bölüm 7) desteklenir.
-- **Hücre boyutlandırma / aspect-ratio:**
-  - Grid konteyneri: genişlik `%100`, `max-width: 440px`, `aspect-ratio: 6 / 8` (COLS/ROWS oranı — kare değil, dikey dikdörtgen).
-  - `display: grid; grid-template-columns: repeat(6, 1fr); grid-template-rows: repeat(8, 1fr); gap: 6px;`
-  - Grid konteyner iç boşluğu (`padding`): 10px, köşe yuvarlaklığı 16px, 2px kenarlık.
-  - Her hücre: `display:flex; align-items:center; justify-content:center;` ortalanmış tek haneli rakam metni.
-  - Hücre font boyutu: `clamp(20px, 7vw, 34px)` — ekran genişliğine göre esnek, min 20px maks 34px.
-  - Hücre köşe yuvarlaklığı: 10px, kenarlık 1.5px.
-  - Alt satır (tıklanabilir) hücreleri farklı arka plan/kenarlık rengiyle (`--bottom-row`, `--bottom-border`) diğerlerinden görsel olarak ayrılır ve `cursor: pointer` alır; diğer satırlar `cursor: default`.
-
----
-
-## 3. Renk Paleti & Tipografi
-
-### CSS Custom Properties (Renkler)
-
-| Değişken | Hex/RGBA | Kullanım |
-|---|---|---|
-| `--bg` | `#0f0e17` | Sayfa arka planı |
-| `--surface` | `#1a1a2e` | Kart/panel arka planları (header stat kutuları, grid konteyner, queue alanı, overlay kutusu) |
-| `--cell-bg` | `#16213e` | Normal (alt satır olmayan) hücre arka planı |
-| `--cell-border` | `#0f3460` | Normal hücre / panel kenarlıkları |
-| `--accent1` | `#ff6b6b` | Kırmızı — yanlış/tehlike/yasak rakam/kritik süre |
-| `--accent2` | `#ffd93d` | Sarı/altın — vurgu, aktif sıra öğesi, logo, skor |
-| `--accent3` | `#6bcb77` | Yeşil — olumlu durum, dolu süre, devam et butonu |
-| `--accent4` | `#4d96ff` | Mavi — level göstergesi, "next" sıra öğesi |
-| `--text` | `#fffffe` | Ana metin rengi |
-| `--text-dim` | `#a7a9be` | İkincil/soluk metin |
-| `--bottom-row` | `rgba(255, 217, 61, 0.15)` | Tıklanabilir alt satır arka planı |
-| `--bottom-border` | `#ffd93d` | Tıklanabilir alt satır kenarlığı |
-
-**Ek renkler (kod içinde doğrudan kullanılan):**
-- Dondurucu (freeze) mavi: `#4dc8ff`, açık mavi glow `#a0e9ff`
-- Devam Et butonu gradyanı: `--accent3` → `#4dd98a`
-- Süre çubuğu geçişleri: yüksek süre → `--accent3`→`--accent2` gradyanı; orta → `--accent2`→`#ffa94d`; kritik → `--accent1`→`#ff8787`
-
-### Tipografi
-
-- **Başlık/vurgu fontu:** `Fredoka One` (cursive fallback) — logo, hücre rakamları, sıra öğeleri, overlay başlıkları, butonlar, combo/level metinleri.
-- **Gövde fontu:** `Nunito` (ağırlıklar: 400, 600, 700, 900) — body varsayılanı, istatistik etiketleri, açıklama metinleri.
-- Google Fonts importu: `Fredoka+One` ve `Nunito:wght@400;600;700;900`.
-
----
-
-## 4. Oyun Mekanikleri
-
-### 4.1 Sıra (Queue) Sistemi ve Hedef Belirleme
-
-- `queue`: 0-9 arası rastgele rakamlardan oluşan bir dizi (FIFO). Oyun başında `fillQueue(30)` ile 30 eleman üretilir.
-- `fillQueue(n)`: `n` adet `rnd()` (0-9 arası rastgele tam sayı) diziye eklenir. Kuyruk 5 elemanın altına düşerse otomatik olarak 20 eleman daha eklenir (`advanceTarget` içinde kontrol edilir).
-- `advanceTarget()`:
-  1. Kuyruk 5'ten azsa doldur.
-  2. `currentTarget = queue[0]` (kuyruğun ilk elemanı güncel hedeftir).
-  3. `recalc()` çağrılarak alt satırda bu hedeften kaç tane olduğu (`remaining`) hesaplanır.
-  4. **Kilitlenme koruması:** Eğer `remaining === 0` ise (hedef rakam şu an alt satırda hiç yoksa), alt satırda **gerçekten var olan** rakamlardan rastgele biri seçilip hem `queue[0]` hem `currentTarget` bu değerle değiştirilir, `recalc()` tekrar çağrılır. Bu, oyunun asla imkânsız bir hedefle kilitlenmemesini garanti eder.
-  5. **Yasak rakam ataması:** `level >= 2` ise, `currentTarget`'tan farklı rastgele bir rakam seçilip `forbiddenNum`'a atanır (bkz. 4.7). `level < 2` ise `forbiddenNum = null`.
-- Ekranda "Sıra" alanında kuyruğun ilk 3 elemanı gösterilir: `active` (güncel hedef, büyütülmüş/parlak), `next`, `next2` (soluklaşan, küçülen).
-- Hedef tamamlanınca (`remaining <= 0`): `queue.shift()` ile kuyruktan çıkarılır, `advanceTarget()` tekrar çağrılarak yeni hedefe geçilir.
-
-### 4.2 Doğru/Yanlış Tıklama Sonuçları — Anlık Ölüm Kuralı
-
-- Tıklama yalnızca alt satır (`r = ROWS-1`) hücrelerinde geçerlidir.
-- Tıklanan hücrenin değeri (`val = grid[ROWS-1][c]`) `currentTarget`'a **eşit değilse**: hücreye `wrong` görsel sınıfı eklenir (kırmızı highlight + shake animasyonu), `combo = 0`, `gameActive = false`, 500ms sonra oyun sonu ekranı (`showGameOver`) tetiklenir. **İstisnasız her yanlış tıklama anında oyunu bitirir** (yasak rakam da dahil, çünkü yasak rakam zaten hedefe eşit olamaz).
-- Tıklanan hücre dondurucu (`freeze`) işaretliyse, değeri ne olursa olsun bu **her zaman güvenlidir** ve yanlış tıklama sayılmaz (bkz. 4.8) — bu kontrol yanlış/doğru kontrolünden **önce** yapılır.
-- Doğru tıklamada: skor, süre, combo güncellemeleri yapılır (bkz. 4.3-4.4), sütun kaydırılır (`shiftColumn`), tüm sütun yeniden boyanır (`paintCell` ile animasyonlu), hedef tamamlandıysa level kontrolü ve yeni hedef ataması yapılır.
-
-### 4.3 Skor Hesaplama Formülü
-
-Her doğru tıklamada:
-
-```
-delta = lastClickTime ? (now - lastClickTime) : 800   // ms cinsinden, önceki tıklamadan bu yana geçen süre
-base  = max(10, floor(900 / (delta/1000 + 0.4)))       // hıza dayalı temel puan
-mult  = min(COMBO_CAP, 1 + floor(combo / 4))           // combo çarpanı
-bonus = base * mult
-score += bonus
-```
-
-- İlk tıklamada (`lastClickTime` henüz yoksa) `delta` varsayılan olarak 800ms kabul edilir.
-- `base` formülü: ne kadar hızlı tıklarsan (delta küçükse) o kadar yüksek puan alırsın; formül `900 / (saniye + 0.4)` şeklinde ters orantılıdır, minimum 10 puan garantilenir.
-- Skor `bestScore`'u geçerse anında `localStorage.numdrop_best` güncellenir.
-- Ekranda skor popup'ı gösterilir: çarpan >1 ise `"+{bonus} x{mult}"`, değilse `"+{bonus}"`.
-
-### 4.4 Combo Sistemi
-
-- Her doğru tıklamada `combo++`.
-- Çarpan formülü: `mult = min(COMBO_CAP, 1 + floor(combo / 4))` — yani her 4 ardışık doğru tıklamada çarpan 1 artar, `COMBO_CAP` (5) ile sınırlıdır.
-- **Sıfırlanma koşulları:**
-  - Yanlış tıklama anında `combo = 0`.
-  - Oyun döngüsünde (`gameLoop`), son doğru tıklamadan bu yana **2500ms (2.5 saniye)** geçtiyse combo otomatik olarak `0`'a döner ve combo metni temizlenir.
-- Combo görsel göstergesi (`showCombo`):
-  - `combo < 2` ise gösterge boş.
-  - `combo >= 12`: çift ateş emoji `🔥🔥`, renk `#ff6b6b` (kırmızı).
-  - `combo >= 6`: tek ateş emoji `🔥`, renk `#ffd93d` (sarı).
-  - Diğer durumlarda (2-5 arası): emoji yok, renk `#6bcb77` (yeşil).
-  - Metin formatı: `"{fire} COMBO {combo}  x{mult}"`.
-  - `comboPop` animasyonu her güncellemede yeniden tetiklenir (class remove + reflow + add tekniğiyle).
-
-### 4.5 Süre (timeLeft) Mekaniği
-
-- `TIME_MAX = 100` — süre çubuğunun maksimum/başlangıç değeri (birim yok, soyut "dolu çubuk" değeri).
-- Süre her karede (`requestAnimationFrame` tabanlı `gameLoop`) şu şekilde azalır:
-  ```
-  drainRate() = START_DRAIN + (level - 1) * DRAIN_PER_LEVEL
-  timeLeft -= drainRate() * dt   // dt: saniye cinsinden kare arası geçen süre
-  ```
-  - `START_DRAIN = 7` (level 1'de saniyede erime miktarı)
-  - `DRAIN_PER_LEVEL = 2.2` (her level saniyedeki erime hızına eklenen miktar)
-  - Bu erime, **yalnızca** dondurma aktif değilse (`Date.now() >= frozenUntil`) uygulanır.
-- Doğru tıklamada eklenen süre:
-  ```
-  timeGain = max(3, TIME_PER_HIT_BASE - (level - 1) * 0.5)
-  timeLeft = min(TIME_MAX, timeLeft + timeGain)
-  ```
-  - `TIME_PER_HIT_BASE = 9` (level 1'de doğru tıklama başına eklenen süre)
-  - Level arttıkça eklenen süre azalır (level başına -0.5), minimum 3 ile sınırlanır. Bu, yüksek levellerde oyunu zorlaştırır.
-- `timeLeft <= 0` olduğunda: `timeLeft = 0`, `gameActive = false`, 300ms sonra `showGameOver()` çağrılır.
-- Süre çubuğu (`speed-fill`) genişliği `pct = timeLeft / TIME_MAX` oranında ayarlanır; renk pct'ye göre değişir (bkz. Bölüm 3), `pct <= 0.25` iken `critical` sınıfı ile yanıp söner (`blink` animasyonu, 0.5s döngü).
-
-### 4.6 Level Sistemi
-
-- `TARGETS_PER_LEVEL = 5` — her 5 hedef tamamlanınca (`targetsDone % TARGETS_PER_LEVEL === 0`) `levelUp()` çağrılır.
-- `levelUp()` içinde:
-  - `level++`
-  - **+1 kalıcı rozet** kazanılır (`badges++`, `localStorage.numdrop_badges` güncellenir, ekran anında yenilenir).
-  - **Süre bonusu:** `timeLeft = min(TIME_MAX, timeLeft + 15)`.
-  - **Görsel flaş:** `#levelup-flash` elemanı `"LEVEL {level}"` metniyle `levelPop` animasyonunu (1s, tam ekran ortalanmış, opaklık ve ölçek geçişli) tetikler.
-  - Dolaylı etki: level arttıkça `drainRate()` artar (oyun hızlanır) ve `timeGain` azalır (süre kazancı düşer) — yani oyun kademeli olarak zorlaşır.
-
-### 4.7 Yasak Rakam (Forbidden Number) Mekaniği
-
-- Yalnızca `level >= 2` iken aktiftir.
-- Her `advanceTarget()` çağrısında, güncel hedeften (`currentTarget`) farklı rastgele bir rakam `forbiddenNum` olarak seçilir (do-while döngüsüyle hedefe eşit olmaması garantilenir).
-- Alt satırda `forbiddenNum` değerine sahip hücreler görsel olarak işaretlenir (`forbidden` class): kırmızı arka plan/kenarlık, `dangerPulse` animasyonu (0.8s, sürekli, box-shadow yoğunluğu titreşimi) ile "tehlike" hissi verir.
-- Yasak rakama tıklamak, teknik olarak zaten "hedef değil" kategorisine girdiği için normal yanlış tıklama kuralıyla (4.2) **anında oyun sonu** tetikler — ayrı bir ceza mekanizması yoktur, görsel uyarı amaçlıdır.
-- Sıra alanında ayrıca ayrı bir "🚫 Basma" kutusu (`forbidden-box`) gösterilir, içinde güncel yasak rakam yazar.
-
-### 4.8 Dondurucu (Freeze) Mekaniği
-
-- `FREEZE_DURATION = 3` (saniye) — dondurmanın süre erimesini durdurma süresi.
-- `FREEZE_SPAWN_CHANCE = 0.18` (%18) — bir hedef tamamlandığında dondurucunun ortaya çıkma olasılığı.
-- `maybeSpawnFreeze()` — her hedef tamamlandığında çağrılır:
-  1. `Math.random() > FREEZE_SPAWN_CHANCE` ise çıkış yapılmaz (spawn olmaz).
-  2. Alt satırda, **hedef olmayan, yasak rakam olmayan ve zaten özel işaretli olmayan** hücreler arasından rastgele biri seçilir.
-  3. Uygun hücre yoksa spawn iptal edilir.
-  4. Seçilen hücreye `special[ROWS-1][c] = 'freeze'` atanır; görsel olarak mavi glow (`freeze` class, `freezeGlow` animasyonu, sağ üstte ❄️ emoji) ile işaretlenir.
-- Dondurucu hücreye tıklanınca (`onClick` içinde en öncelikli kontrol):
-  - `frozenUntil = Date.now() + FREEZE_DURATION * 1000` (3 saniyeliğine süre erimesi durur).
-  - `score += 50` sabit bonus, `"❄️ +50"` popup'ı gösterilir.
-  - Hücrenin özel işareti temizlenir, sütun normal şekilde kaydırılır (`shiftColumn`).
-  - **Bu tıklama combo'yu etkilemez, hedef ilerlemesini saymaz** — sadece bonus puan ve dondurma sağlar.
-- Dondurma aktifken süre çubuğu `frozen` görünümüne geçer: mavi gradyan, `"❄️ Dondu"` etiketi, `critical` blink kapatılır.
-
-### 4.9 Rozet (Badge) Sistemi
-
-- `badges`: `localStorage.numdrop_badges`'ten okunur, `0` varsayılan.
-- **Kazanma:** Her level atlayışında (`levelUp()`) +1 rozet, kalıcı olarak `localStorage`'a yazılır.
-- **Kalıcılık:** Rozetler oyun oturumları arasında **kalıcıdır** — `startGame()` çağrısında rozet sayısı **sıfırlanmaz** (yalnızca skor, level, grid, combo gibi oturuma özel state sıfırlanır).
-- **Harcama — "Devam Et" (`continueGame()`):**
-  - Yalnızca `badges > 0` iken aktiftir; aksi halde buton `disabled` görünümde ve tıklanamaz durumda gösterilir (`"(🏅 yok)"` etiketiyle).
-  - Tıklanınca: `badges--`, `localStorage` güncellenir, oyun sonu ekranı kapanır.
-  - **Skor, level ve grid durumu korunur** (sıfırlanmaz) — oyuncu kaldığı yerden devam eder.
-  - Yanlış tıklama görsel vurgusu (`wrong` class) temizlenir.
-  - Hedefin hâlâ alt satırda olup olmadığı kontrol edilir (`recalc()`); yoksa `advanceTarget()` ile yeni hedef atanır.
-  - `timeLeft` tam doldurulur (`TIME_MAX`), `combo = 0`, `frozenUntil = 0`, `lastClickTime = 0` sıfırlanır.
-  - Oyun döngüsü yeniden başlatılır.
-
----
-
-## 5. Tüm Sabit/Ayarlanabilir Değerler (Config Tablosu)
-
-| Sabit | Değer | Açıklama |
-|---|---|---|
-| `COLS` | `6` | Izgara sütun sayısı |
-| `ROWS` | `8` | Izgara satır sayısı (en alt satır = tıklanabilir alan) |
-| `TIME_MAX` | `100` | Süre çubuğunun maksimum/dolu değeri |
-| `START_DRAIN` | `7` | Level 1'de saniyede süre erime miktarı |
-| `DRAIN_PER_LEVEL` | `2.2` | Her level ile saniyedeki erime hızına eklenen miktar |
-| `TIME_PER_HIT_BASE` | `9` | Level 1'de doğru tıklama başına eklenen süre |
-| `TARGETS_PER_LEVEL` | `5` | Kaç hedef tamamlanınca level atlanacağı |
-| `FREEZE_DURATION` | `3` | Dondurucunun süre erimesini durdurma süresi (saniye) |
-| `FREEZE_SPAWN_CHANCE` | `0.18` | Hedef tamamlanınca dondurucunun ortaya çıkma olasılığı (%18) |
-| `COMBO_CAP` | `5` | Combo çarpanının ulaşabileceği maksimum değer |
-
-**Türetilmiş / ek sabitler (config bloğu dışında ama sabit değerli):**
-
-| Değer | Kullanım |
-|---|---|
-| `800` (ms) | İlk tıklamada varsayılan `delta` değeri (skor formülü) |
-| `2500` (ms) | Combo'nun otomatik sıfırlanma eşiği (son tıklamadan bu yana geçen süre) |
-| `10` | Skor formülünde `base` için minimum değer |
-| `3` | `timeGain` için minimum değer (level yükseldikçe süre kazancının düşemeyeceği alt sınır) |
-| `15` | Level atlayışında eklenen sabit süre bonusu |
-| `50` | Dondurucuya tıklamada kazanılan sabit puan bonusu |
-| `0.5` | Level başına `timeGain`'den düşülen miktar |
-| `30` | Oyun başlangıcında kuyruğa doldurulan ilk eleman sayısı |
-| `20` | Kuyruk 5'in altına düşünce eklenen ek eleman sayısı |
-| `5` | Kuyruğun yeniden doldurulmasını tetikleyen eşik (kuyruk uzunluğu bu değerin altına düşünce) |
-
----
-
-## 6. Ekranlar & UI Bileşenleri
-
-### 6.1 Header (üst bilgi çubuğu)
-- Sol: "NumDrop" logosu (gradyan metin, Fredoka One, 2rem, harf aralığı 2px).
-- Sağ: 4 istatistik kutusu (`stat-box`), her biri etiket + değer:
-  1. 🏅 Rozet (yeşil `--accent3`)
-  2. Level (mavi `--accent4`)
-  3. Skor (varsayılan sarı `--accent2`)
-  4. En Yüksek (varsayılan sarı `--accent2`)
-
-### 6.2 Başlangıç Ekranı (`start-overlay`)
-- Tam ekran karartma overlay'i (`rgba(15,14,23,.92)`), ortalanmış kutu.
-- Gradyan başlıklı "NumDrop" logosu.
-- Açıklama metni (`overlay-sub`): oyun kuralları özet halinde — hedefi bulma, süre mekaniği, level/rozet sistemi, yanlış tıklamanın ölümcül olduğu uyarısı, yasak rakam ve combo/dondurucu açıklaması.
-- "🎮 Başla" butonu → `startGame()`.
-- Sayfa ilk yüklendiğinde bu overlay varsayılan olarak görünür (`show` class).
-
-### 6.3 Oyun İçi HUD
-- **Grid** (`#grid`): 6x8 ızgara.
-- **Level-up flash** (`#levelup-flash`): grid üstünde, tam ekran, geçici "LEVEL N" metni.
-- **Queue alanı** (`#queue-area`): "Sıra" etiketi + ilk 3 kuyruk elemanı (active/next/next2 stilleri) + kalan sayısı (`"× N kaldı"`) + yasak rakam kutusu (yalnızca level 2+ görünür).
-- **Combo göstergesi** (`#combo-display` / `#combo-text`): combo ≥2 iken belirir.
-- **Süre çubuğu** (`#speed-wrap`): "⏱ Süre" etiketi + dolum çubuğu (`#speed-fill`), renk/durum süreye göre değişir.
-
-### 6.4 Oyun Sonu Ekranı (`gameover-overlay`)
-- Tam ekran karartma overlay'i.
-- "💥 Bitti" başlığı (kırmızı).
-- Final skor (büyük, sarı).
-- Alt mesaj: rekor kırıldıysa `"🏆 Yeni rekor! · Level {level}"`, kırılmadıysa `"Level {level} · En yüksek: {bestScore}"`.
-- Üç buton (dikey sıralı, `btn-row`):
-  1. **▶️ Devam Et** (`continue-btn`) — yalnızca `badges > 0` iken aktif; pasifken gri/disabled görünüm ve `"(🏅 yok)"` etiketi, aktifken `"(🏅 {badges})"` etiketi. → `continueGame()`.
-  2. **🔄 Tekrar Oyna** → `startGame()` (her şeyi sıfırdan başlatır, rozetler hariç).
-  3. **✖ Bitir** (`btn-quit`, soluk stil) → `quitGame()` (başlangıç ekranına döner).
-
----
-
-## 7. Animasyonlar & Geri Bildirimler
-
-| Animasyon | Tetiklenme Anı | Amaç / Davranış |
-|---|---|---|
-| `slideDown` (.22s ease-out) | Bir sütun kaydırıldığında (`shiftColumn` sonrası `paintCell(..., animate=true)`) | Hücrenin yukarıdan kayarak (translateY -105% → 0, opacity .3 → 1) yerine gelmesi |
-| `shake` (.3s) | Yanlış hücreye tıklanınca | Hücrenin yatayda sarsılması (kırmızı highlight ile birlikte) |
-| `comboPop` (.5s ease-out) | Her doğru tıklamada `combo >= 2` olduğunda | Combo metninin büyüyerek belirmesi (scale .6 → 1.25 → 1, opacity 0 → 1) |
-| `levelPop` (1s ease-out) | Level atlandığında | Tam ekran "LEVEL N" flaşının belirip kaybolması (opacity/scale geçişi) |
-| `dangerPulse` (.8s infinite alternate) | Level 2+ iken, yasak rakamlı hücrede sürekli | Kırmızı box-shadow yoğunluğunun titreşerek tehlike hissi vermesi |
-| `freezeGlow` (1s infinite alternate) | Dondurucu hücre ekranda olduğu sürece | Mavi box-shadow yoğunluğunun titreşerek dikkat çekmesi |
-| `floatUp` (.8s forwards) | Her doğru tıklama / dondurucu tıklamasında (`showPopup`) | Skor popup'ının (`+N` veya `+N xM` veya `❄️ +50`) yukarı doğru süzülerek solması (translateY 0 → -50px, opacity 1 → 0) |
-| `blink` (.5s infinite) | Süre çubuğu `pct <= 0.25` (kritik seviyede) olduğunda | Süre çubuğunun opaklığının titreşerek acil uyarı vermesi |
-
-**Skor popup detayı:** `showPopup(col, text)` tıklanan hücrenin tam konumunda (`getBoundingClientRect` ile hesaplanan grid-relative pozisyon) geçici bir `div` oluşturur, animasyon bitince (`animationend` event) DOM'dan kaldırır.
-
----
-
-## 8. State Yönetimi
-
-### 8.1 Oturum İçi (Runtime) State — her `startGame()` çağrısında sıfırlanır
-
-| Değişken | Tip | Açıklama |
-|---|---|---|
-| `grid` | `number[8][6]` | Izgara değerleri (0-9) |
-| `special` | `(string\|null)[8][6]` | Hücre başına özel durum: `null` veya `'freeze'` |
-| `queue` | `number[]` | Bekleyen hedef rakamlar kuyruğu |
-| `score` | `number` | Güncel skor |
-| `gameActive` | `boolean` | Oyunun aktif/duraklı olduğu |
-| `currentTarget` | `number\|null` | Güncel hedef rakam |
-| `remaining` | `number` | Alt satırda hedeften kalan adet |
-| `lastClickTime` | `number` (timestamp) | Skor/combo hesaplaması için son tıklama zamanı |
-| `level` | `number` | Güncel level (1'den başlar) |
-| `targetsDone` | `number` | Tamamlanan toplam hedef sayısı |
-| `forbiddenNum` | `number\|null` | Güncel yasak rakam (yalnızca level 2+) |
-| `combo` | `number` | Ardışık doğru tıklama sayacı |
-| `frozenUntil` | `number` (timestamp) | Dondurmanın bitiş zamanı |
-| `timeLeft` | `number` | Kalan süre (0-100 arası) |
-| `lastTick` | `number` (timestamp) | `requestAnimationFrame` kare zamanlaması için |
-| `rafId` | `number\|null` | Aktif animasyon kare isteği ID'si (iptal için) |
-
-### 8.2 Kalıcı State (localStorage) — oturumlar arası korunur
-
-| Anahtar | Tip | Açıklama |
-|---|---|---|
-| `numdrop_best` | `number` (string olarak saklanır) | En yüksek skor (`bestScore`) |
-| `numdrop_badges` | `number` (string olarak saklanır) | Biriken rozet sayısı (`badges`) — yalnızca level atlayışında artar, "Devam Et" ile azalır; `startGame()`'de **sıfırlanmaz** |
-
-**Önemli davranış notu:** `continueGame()` çağrıldığında `score`, `level`, `grid`, `special`, `targetsDone`, `queue` gibi ilerleme durumu **korunur** — yalnızca `timeLeft`, `combo`, `frozenUntil`, `lastClickTime` sıfırlanır/doldurulur. `startGame()` (Tekrar Oyna) ise `badges` hariç **her şeyi** sıfırdan başlatır.
-
----
-
-## 9. Mobil Uygulamaya Taşıma Gereksinimleri
-
-### 9.1 Teknoloji Önerisi
-- Bu prototip vanilla HTML/CSS/JS ve `localStorage` kullanan tek dosyalık bir web uygulamasıdır. Android APK'ya taşımak için önerilen yaklaşımlar (öncelik sırasıyla):
-  1. **Capacitor** (Ionic) — mevcut web kodunu neredeyse değiştirmeden native bir WebView kabına sarar; en düşük efor, en hızlı yol. `localStorage` → Capacitor Preferences API ile native depolamaya taşınabilir (opsiyonel, WebView localStorage da çalışır).
-  2. **React Native** — daha native performans/his isteniyorsa, oyun mantığı JS'de korunarak UI React Native View/Pressable bileşenlerine, animasyonlar `Reanimated`/`Animated` API'sine taşınır.
-  3. **Flutter** — tamamen yeniden yazım gerektirir (Dart), ancak en iyi native performans ve animasyon kontrolü sağlar.
-- **Öneri:** Hızlı bir MVP için Capacitor, uzun vadeli/performans kritik bir ürün için React Native.
-
-### 9.2 Dokunmatik Optimizasyon
-- Mevcut `cursor: pointer` / `:hover` stilleri mobilde anlamsızdır; bunların yerine `:active` (basılı tutma) durumları için görsel geri bildirim (örn. hafif scale-down veya opacity değişimi) eklenmelidir.
-- Tıklama hedefleri (alt satır hücreleri) parmak dokunuşu için yeterince büyük olmalı — mevcut `clamp(20px,7vw,34px)` font boyutu korunmalı, hücre dokunma alanı en az 44x44pt (iOS HIG) / 48x48dp (Material) önerisine uygun olmalı.
-- `touch-action: manipulation` ve `-webkit-tap-highlight-color: transparent` zaten mevcut kodda var — native tarafta da çift dokunma zoom'u ve highlight flaşı engellenmelidir.
-- Çoklu hızlı dokunuşlarda (fast combo oynanışı) dokunma olaylarının kaçırılmaması için debounce/throttle **uygulanmamalı** — oyun tasarımı gereği her dokunuş anında işlenmelidir.
-
-### 9.3 Safe-Area / Notch Desteği
-- Mevcut kodda `env(safe-area-inset-top)` ve `env(safe-area-inset-bottom)` zaten kullanılıyor; native tarafa geçişte bu, platformun kendi safe-area API'leri ile eşleştirilmeli (Capacitor: `SafeArea` plugin veya CSS env() WebView içinde de çalışır; React Native: `SafeAreaView`/`react-native-safe-area-context`).
-- Ekranın üst/alt kenarlarına yakın interaktif elemanlar (header, alt overlay butonları) çentik/ev çubuğu (home indicator) ile çakışmamalı.
-
-### 9.4 Ekran Yönü Kilidi
-- Oyun **yalnızca dikey (portrait)** modda tasarlanmıştır (grid `aspect-ratio: 6/8`). Android manifestinde `android:screenOrientation="portrait"` kilidi uygulanmalı.
-
-### 9.5 Performans
-- Mevcut oyun döngüsü zaten `requestAnimationFrame` tabanlıdır (`gameLoop`) — bu native/hibrit WebView içinde de korunmalı, `setInterval`'a geçilmemeli.
-- 48 hücrelik (6x8) DOM manipülasyonu her tıklamada yalnızca ilgili sütun için yapılıyor (`for r in ROWS: paintCell(r,c)`) — tüm grid'i her karede yeniden çizmiyor, bu verimli yaklaşım korunmalı.
-- React Native'e taşınırsa, her hücre `React.memo` ile sarılmalı; yalnızca değişen sütun/hücreler yeniden render edilmeli.
-
-### 9.6 Ses / Haptic Feedback (Öneri Alanı — Mevcut Kodda Yok)
-- Mevcut web prototipinde **ses efekti yoktur**. Mobil versiyon için önerilir:
-  - Doğru tıklama: kısa "tık/ping" sesi + hafif haptic (Android `Vibration` API, kısa 10-20ms darbe).
-  - Yanlış tıklama / oyun sonu: düşük ton "buzz" sesi + orta şiddette haptic (50-100ms).
-  - Level atlama: yükselen ton/fanfar sesi + çift haptic darbe.
-  - Dondurucu toplama: "cam kırılma/donma" tarzı kısa ses efekti.
-  - Ayarlarda ses/haptic açma-kapama seçeneği eklenmeli (bkz. Bölüm 10, Açık Sorular).
-
-### 9.7 İkon / Splash Screen
-- Uygulama ikonu: logo temasına uygun (sarı-kırmızı gradyan, "N" harfi veya rakam motifi öneri), Android adaptive icon formatında (foreground + background layer) hazırlanmalı.
-- Splash screen: `--bg` (#0f0e17) arka plan üzerine "NumDrop" logosu (gradyan metin veya statik PNG versiyonu), kısa süreli gösterim.
-
-### 9.8 Offline Çalışma
-- Oyun mantığı tamamen client-side'dır (harici API çağrısı yok), tek bağımlılık Google Fonts CDN importudur. Native versiyonda fontlar **bundle içine gömülmeli** (offline erişim için `Fredoka One` ve `Nunito` font dosyaları assets olarak paketlenmeli), CDN'e bağımlılık kaldırılmalı.
-- `localStorage` yerine native depolama (Capacitor Preferences / AsyncStorage / SharedPreferences) kullanılırsa veri cihaz üzerinde offline kalıcı olarak saklanmaya devam eder.
-
-### 9.9 APK Build / Export Adımları (Capacitor Örneği)
-1. Node.js + npm kurulumu, `npm init`, `@capacitor/core` ve `@capacitor/cli` kurulumu.
-2. Mevcut `index.html` (ve varsa ayrılmış CSS/JS dosyaları) bir `www/` klasörüne yerleştirilir.
-3. `npx cap init` ile proje yapılandırılır, `npx cap add android` ile Android platformu eklenir.
-4. Gerekli SDK: **Android Studio** (Android SDK, minimum API level öneri: **minSdkVersion 24 (Android 7.0)** — modern WebView/CSS özellikleri için makul bir alt sınır; targetSdkVersion güncel Play Store gereksinimlerine göre ayarlanmalı (örn. API 34+).
-5. `npx cap sync android` ile web varlıkları native projeye kopyalanır.
-6. Android Studio üzerinden `Build > Generate Signed Bundle / APK` ile imzalı APK/AAB üretimi:
-   - Bir keystore (.jks) oluşturulmalı (`keytool -genkey -v -keystore ...`), imzalama bilgileri güvenli saklanmalı.
-   - Play Store dağıtımı için **AAB (Android App Bundle)** formatı önerilir, doğrudan APK dağıtımı için **APK** yeterlidir.
-7. Test: fiziksel cihaz veya emülatörde (Android Studio AVD) tam oynanış testi, özellikle dokunma tepkisi ve performans (60fps hedefi) doğrulanmalı.
-
----
-
-## 10. Kapsam Dışı / Netleştirilmesi Gerekenler (Açık Sorular)
-
-Aşağıdaki noktalar mevcut web prototipinde (`index.html`) **bulunmamaktadır** ve mobil sürüm için karar verilmesi/netleştirilmesi gerekmektedir:
-
-- **Reklam / IAP:** Uygulamada reklam gösterimi (banner, interstitial, rewarded — örn. "reklam izle, rozet kazan") olacak mı? Rozetlerin parayla satın alınabileceği bir IAP (in-app purchase) modeli düşünülüyor mu?
-- **Ses efektleri / müzik:** Arka plan müziği eklenecek mi? Bölüm 9.6'da önerilen SFX'ler onaylanacak mı, yoksa farklı bir ses tasarımı mı istenir?
-- **Çoklu dil desteği:** Şu an tüm metinler Türkçe sabit kodlanmış (hardcoded). Uygulama çok dilli mi olacak (örn. İngilizce, Almanca)? Eğer evetse i18n altyapısı (string dosyaları, dil seçimi) gerekir.
-- **App Store / Play Store meta verileri:** Uygulama adı, açıklama metni, ekran görüntüleri, kategori (Arcade/Puzzle), yaş derecelendirmesi (ESRB/PEGI), gizlilik politikası metni henüz belirlenmemiş.
-- **Giriş / hesap sistemi:** Skor ve rozetler şu an yalnızca cihaz-lokal (`localStorage`). Bulut senkronizasyonu, kullanıcı hesabı (Google Play Games Services entegrasyonu, liderlik tablosu/leaderboard, başarımlar) planlanıyor mu?
-- **Analitik / kaza raporlama:** Firebase Analytics, Crashlytics gibi araçlar entegre edilecek mi?
-- **Zorluk ayarları:** Config tablosundaki sabitler (Bölüm 5) oyuncuya açık bir "zorluk seçimi" (Kolay/Normal/Zor) olarak sunulacak mı, yoksa sabit mi kalacak?
-- **Erişilebilirlik:** Renk körlüğü desteği (özellikle kırmızı/yeşil ayrımı — yasak rakam vs. normal, süre çubuğu renkleri kritik), ekran okuyucu desteği gerekiyor mu?
-- **Duraklama (pause) mekanizması:** Web prototipinde oyunu duraklatma özelliği yok (yalnızca sekme arka plana alındığında `requestAnimationFrame` doğal olarak durur). Mobilde uygulama arka plana alındığında/çağrı geldiğinde açık bir pause/resume ekranı gerekli mi?
-- **Yatay mod desteği:** Tablet gibi büyük ekranlarda da yalnızca dikey mi kilitlenecek, yoksa responsive bir yatay layout mu düşünülecek?
-- **Görsel varlıklar:** Şu an tüm görseller CSS/emoji ile üretiliyor (özel sprite/illüstrasyon yok). Native versiyon için özel illüstrasyon/ikon seti (logo, güç-up ikonları vb.) hazırlanacak mı?
-
----
-
-*Bu doküman, NumDrop v1 (web prototip) kaynak kodunun tam analizine dayanmaktadır ve geliştirme ajanının kaynak koda erişimi olmadan bire bir aynı oyunu yeniden inşa edebilmesi amacıyla hazırlanmıştır.*
+/* =========================================================================
+   NumDrop — game logic
+   Faithful implementation of GAME_SPEC.md (sections 1–8).
+   Pure, DOM-free helpers live in the CORE object so they can be unit-tested
+   under Node (see test/game.test.js); the rest wires them to the DOM.
+   ========================================================================= */
+(function () {
+  "use strict";
+
+  /* ----------------------------- Config (§5) ---------------------------- */
+  var CFG = {
+    COLS: 6,
+    ROWS: 8,
+    TIME_MAX: 100,
+    START_DRAIN: 7,
+    DRAIN_PER_LEVEL: 2.2,
+    TIME_PER_HIT_BASE: 9,
+    TARGETS_PER_LEVEL: 5,
+    FREEZE_DURATION: 3, // seconds
+    FREEZE_SPAWN_CHANCE: 0.18,
+    COMBO_CAP: 5,
+  };
+
+  var LS_BEST = "numdrop_best";
+  var LS_BADGES = "numdrop_badges";
+  var LS_MUTE = "numdrop_mute";
+
+  /* ---------------------- Pure, testable helpers ------------------------ */
+  var CORE = {
+    rnd: function () {
+      return Math.floor(Math.random() * 10); // 0..9
+    },
+
+    /* §4.3 base score from click delta (ms) */
+    baseScore: function (deltaMs) {
+      return Math.max(10, Math.floor(900 / (deltaMs / 1000 + 0.4)));
+    },
+
+    /* §4.4 combo multiplier */
+    multiplier: function (combo, cap) {
+      cap = cap == null ? CFG.COMBO_CAP : cap;
+      return Math.min(cap, 1 + Math.floor(combo / 4));
+    },
+
+    /* §4.5 drain rate per second for a level */
+    drainRate: function (level) {
+      return CFG.START_DRAIN + (level - 1) * CFG.DRAIN_PER_LEVEL;
+    },
+
+    /* §4.5 time added per correct hit */
+    timeGain: function (level) {
+      return Math.max(3, CFG.TIME_PER_HIT_BASE - (level - 1) * 0.5);
+    },
+
+    /* §2 column shift — mutates grid & special in place.
+       Bottom row = ROWS-1; a new random digit enters at row 0. */
+    shiftColumn: function (grid, special, c, rows, rndFn) {
+      rndFn = rndFn || CORE.rnd;
+      for (var r = rows - 1; r >= 1; r--) {
+        grid[r][c] = grid[r - 1][c];
+        special[r][c] = special[r - 1][c];
+      }
+      grid[0][c] = rndFn();
+      special[0][c] = null;
+    },
+
+    /* count occurrences of target in the bottom row */
+    countInBottom: function (grid, target, rows, cols) {
+      var n = 0;
+      for (var c = 0; c < cols; c++) if (grid[rows - 1][c] === target) n++;
+      return n;
+    },
+
+    /* distinct digit values present in the bottom row */
+    bottomValues: function (grid, rows, cols) {
+      var vals = [];
+      for (var c = 0; c < cols; c++) vals.push(grid[rows - 1][c]);
+      return vals;
+    },
+
+    /* §4.7 pick a forbidden digit different from target */
+    pickForbidden: function (target, rndFn) {
+      rndFn = rndFn || CORE.rnd;
+      var f;
+      do {
+        f = rndFn();
+      } while (f === target);
+      return f;
+    },
+
+    CFG: CFG,
+  };
+
+  /* Export pure core for Node tests; stop here when there is no DOM. */
+  if (typeof module !== "undefined" && module.exports) {
+    module.exports = CORE;
+  }
+  if (typeof document === "undefined") return;
+
+  /* ============================= Runtime state ========================== */
+  var grid, special, queue;
+  var score, gameActive, currentTarget, remaining, lastClickTime;
+  var level, targetsDone, forbiddenNum, combo, frozenUntil, timeLeft;
+  var lastTick, rafId;
+
+  /* Persistent state */
+  var bestScore = num(localStorage.getItem(LS_BEST), 0);
+  var badges = num(localStorage.getItem(LS_BADGES), 0);
+  var muted = localStorage.getItem(LS_MUTE) === "1";
+
+  function num(v, d) {
+    var n = parseInt(v, 10);
+    return isNaN(n) ? d : n;
+  }
+
+  /* ============================= DOM refs =============================== */
+  var $ = function (id) {
+    return document.getElementById(id);
+  };
+  var gridEl = $("grid");
+  var flashEl = $("levelup-flash");
+  var queueItemsEl = $("queue-items");
+  var remainingEl = $("remaining");
+  var forbiddenBoxEl = $("forbidden-box");
+  var forbiddenNumEl = $("forbidden-num");
+  var comboTextEl = $("combo-text");
+  var speedFillEl = $("speed-fill");
+  var speedTextEl = $("speed-text");
+  var startOverlay = $("start-overlay");
+  var gameoverOverlay = $("gameover-overlay");
+  var continueBtn = $("continue-btn");
+
+  /* cell element cache: cells[r][c] */
+  var cells = [];
+
+  function buildGrid() {
+    gridEl.innerHTML = "";
+    cells = [];
+    for (var r = 0; r < CFG.ROWS; r++) {
+      cells[r] = [];
+      for (var c = 0; c < CFG.COLS; c++) {
+        var cell = document.createElement("div");
+        cell.className = "cell";
+        cell.dataset.r = r;
+        cell.dataset.c = c;
+        gridEl.appendChild(cell);
+        cells[r][c] = cell;
+      }
+    }
+  }
+
+  /* ============================= Audio (§9.6) ========================== */
+  var audioCtx = null;
+  function ensureAudio() {
+    if (audioCtx || muted) return;
+    try {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    } catch (e) {
+      audioCtx = null;
+    }
+  }
+  function beep(freq, dur, type, gain) {
+    if (muted || !audioCtx) return;
+    try {
+      var t = audioCtx.currentTime;
+      var osc = audioCtx.createOscillator();
+      var g = audioCtx.createGain();
+      osc.type = type || "sine";
+      osc.frequency.value = freq;
+      g.gain.setValueAtTime(gain || 0.06, t);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      osc.connect(g).connect(audioCtx.destination);
+      osc.start(t);
+      osc.stop(t + dur);
+    } catch (e) {}
+  }
+  function vibrate(ms) {
+    if (muted) return;
+    if (navigator.vibrate) {
+      try {
+        navigator.vibrate(ms);
+      } catch (e) {}
+    }
+  }
+  var sfx = {
+    correct: function () {
+      beep(660, 0.08, "triangle", 0.05);
+      vibrate(12);
+    },
+    wrong: function () {
+      beep(150, 0.35, "sawtooth", 0.09);
+      vibrate([60, 40, 60]);
+    },
+    level: function () {
+      beep(523, 0.12, "sine", 0.06);
+      setTimeout(function () {
+        beep(784, 0.18, "sine", 0.06);
+      }, 110);
+      vibrate([20, 30, 20]);
+    },
+    freeze: function () {
+      beep(880, 0.12, "sine", 0.05);
+      setTimeout(function () {
+        beep(1175, 0.14, "sine", 0.05);
+      }, 90);
+      vibrate(15);
+    },
+  };
+
+  /* ============================= Queue (§4.1) ========================== */
+  function fillQueue(n) {
+    for (var i = 0; i < n; i++) queue.push(CORE.rnd());
+  }
+
+  function advanceTarget() {
+    if (queue.length < 5) fillQueue(20);
+    currentTarget = queue[0];
+    recalc();
+    /* §4.1 deadlock guard: target must exist in the bottom row */
+    if (remaining === 0) {
+      var vals = CORE.bottomValues(grid, CFG.ROWS, CFG.COLS);
+      var pick = vals[Math.floor(Math.random() * vals.length)];
+      queue[0] = pick;
+      currentTarget = pick;
+      recalc();
+    }
+    /* §4.7 forbidden digit only from level 2 */
+    if (level >= 2) {
+      forbiddenNum = CORE.pickForbidden(currentTarget);
+    } else {
+      forbiddenNum = null;
+    }
+  }
+
+  function recalc() {
+    remaining = CORE.countInBottom(grid, currentTarget, CFG.ROWS, CFG.COLS);
+  }
+
+  /* ============================= Freeze (§4.8) ========================= */
+  function maybeSpawnFreeze() {
+    if (Math.random() > CFG.FREEZE_SPAWN_CHANCE) return;
+    var candidates = [];
+    var br = CFG.ROWS - 1;
+    for (var c = 0; c < CFG.COLS; c++) {
+      var v = grid[br][c];
+      if (v === currentTarget) continue;
+      if (forbiddenNum != null && v === forbiddenNum) continue;
+      if (special[br][c]) continue;
+      candidates.push(c);
+    }
+    if (!candidates.length) return;
+    var col = candidates[Math.floor(Math.random() * candidates.length)];
+    special[br][col] = "freeze";
+  }
+
+  /* ============================= Level (§4.6) ========================== */
+  function levelUp() {
+    level++;
+    badges++;
+    localStorage.setItem(LS_BADGES, String(badges));
+    timeLeft = Math.min(CFG.TIME_MAX, timeLeft + 15);
+    flashEl.textContent = "LEVEL " + level;
+    flashEl.classList.remove("pop");
+    void flashEl.offsetWidth;
+    flashEl.classList.add("pop");
+    sfx.level();
+    renderStats();
+  }
+
+  /* ============================= Clicks (§4.2) ======================== */
+  function onCellClick(c) {
+    if (!gameActive) return;
+    var br = CFG.ROWS - 1;
+    var now = Date.now();
+
+    /* §4.8 freeze is always safe — checked FIRST, before wrong/right */
+    if (special[br][c] === "freeze") {
+      frozenUntil = now + CFG.FREEZE_DURATION * 1000;
+      score += 50;
+      if (score > bestScore) {
+        bestScore = score;
+        localStorage.setItem(LS_BEST, String(bestScore));
+      }
+      showPopup(c, "❄️ +50", "#a0e9ff");
+      special[br][c] = null;
+      CORE.shiftColumn(grid, special, c, CFG.ROWS, CORE.rnd);
+      recalc();
+      /* Anti-lock (§4.1): a freeze cell's digit can equal the current target
+         (targets change over its lifetime), so shifting it out may remove the
+         last target instance. Advance to a guaranteed-present target instead of
+         soft-locking. This does NOT count as target progress (no level/badge). */
+      var advanced = false;
+      if (remaining <= 0) {
+        advanceTarget();
+        advanced = true;
+      }
+      sfx.freeze();
+      if (advanced) repaintAll();
+      else paintColumn(c, true);
+      renderStats();
+      renderQueue();
+      renderTime(now);
+      return; // does NOT affect combo or target progress
+    }
+
+    var val = grid[br][c];
+
+    /* §4.2 any non-target click = instant death */
+    if (val !== currentTarget) {
+      combo = 0;
+      gameActive = false;
+      cells[br][c].classList.add("wrong");
+      sfx.wrong();
+      setTimeout(showGameOver, 500);
+      return;
+    }
+
+    /* ------- correct click ------- */
+    var delta = lastClickTime ? now - lastClickTime : 800;
+    var base = CORE.baseScore(delta);
+    combo++;
+    var mult = CORE.multiplier(combo, CFG.COMBO_CAP);
+    var bonus = base * mult;
+    score += bonus;
+    lastClickTime = now;
+
+    if (score > bestScore) {
+      bestScore = score;
+      localStorage.setItem(LS_BEST, String(bestScore));
+    }
+
+    /* §4.5 time gain */
+    timeLeft = Math.min(CFG.TIME_MAX, timeLeft + CORE.timeGain(level));
+
+    showPopup(c, mult > 1 ? "+" + bonus + " x" + mult : "+" + bonus);
+    sfx.correct();
+
+    CORE.shiftColumn(grid, special, c, CFG.ROWS, CORE.rnd);
+    recalc();
+    paintColumn(c, true);
+
+    if (remaining <= 0) {
+      /* target completed */
+      targetsDone++;
+      if (targetsDone % CFG.TARGETS_PER_LEVEL === 0) levelUp();
+      queue.shift();
+      advanceTarget();
+      maybeSpawnFreeze();
+      repaintAll();
+    }
+
+    renderStats();
+    renderQueue();
+    renderCombo(mult);
+    renderTime(now);
+  }
+
+  /* ============================= Rendering ============================= */
+  function paintCell(r, c, animate) {
+    var cell = cells[r][c];
+    var v = grid[r][c];
+    var isBottom = r === CFG.ROWS - 1;
+    var sp = special[r][c];
+
+    cell.className = "cell";
+    if (isBottom) cell.classList.add("bottom");
+    if (sp === "freeze") cell.classList.add("freeze");
+    if (
+      isBottom &&
+      level >= 2 &&
+      forbiddenNum != null &&
+      v === forbiddenNum &&
+      sp !== "freeze"
+    ) {
+      cell.classList.add("forbidden");
+    }
+
+    var badge = sp === "freeze" ? '<span class="fbadge">❄️</span>' : "";
+    cell.innerHTML =
+      '<span class="cnum' + (animate ? " slide" : "") + '">' + v + "</span>" + badge;
+  }
+
+  function paintColumn(c, animate) {
+    for (var r = 0; r < CFG.ROWS; r++) paintCell(r, c, animate);
+  }
+
+  function repaintAll() {
+    for (var c = 0; c < CFG.COLS; c++)
+      for (var r = 0; r < CFG.ROWS; r++) paintCell(r, c, false);
+  }
+
+  function renderStats() {
+    $("stat-badges").textContent = badges;
+    $("stat-level").textContent = level;
+    $("stat-score").textContent = score;
+    $("stat-best").textContent = bestScore;
+  }
+
+  function renderQueue() {
+    var labels = ["active", "next", "next2"];
+    var html = "";
+    for (var i = 0; i < 3; i++) {
+      if (queue[i] == null) continue;
+      html += '<div class="q ' + labels[i] + '">' + queue[i] + "</div>";
+    }
+    queueItemsEl.innerHTML = html;
+    remainingEl.textContent = "× " + remaining + " kaldı";
+
+    if (level >= 2 && forbiddenNum != null) {
+      forbiddenBoxEl.classList.add("show");
+      forbiddenNumEl.textContent = forbiddenNum;
+    } else {
+      forbiddenBoxEl.classList.remove("show");
+    }
+  }
+
+  function renderCombo(mult) {
+    if (combo < 2) {
+      comboTextEl.textContent = "";
+      return;
+    }
+    var fire = "",
+      color = "#6bcb77";
+    if (combo >= 12) {
+      fire = "🔥🔥";
+      color = "#ff6b6b";
+    } else if (combo >= 6) {
+      fire = "🔥";
+      color = "#ffd93d";
+    }
+    if (mult == null) mult = CORE.multiplier(combo, CFG.COMBO_CAP);
+    comboTextEl.style.color = color;
+    comboTextEl.textContent =
+      (fire ? fire + " " : "") + "COMBO " + combo + "  x" + mult;
+    comboTextEl.classList.remove("pop");
+    void comboTextEl.offsetWidth;
+    comboTextEl.classList.add("pop");
+  }
+
+  function renderTime(now) {
+    now = now || Date.now();
+    var pct = timeLeft / CFG.TIME_MAX;
+    speedFillEl.style.width = Math.max(0, pct * 100) + "%";
+    var frozen = now < frozenUntil;
+    speedFillEl.classList.remove("mid", "critical", "frozen");
+    if (frozen) {
+      speedFillEl.classList.add("frozen");
+      speedTextEl.textContent = "❄️ Dondu";
+    } else {
+      speedTextEl.textContent = "⏱ Süre";
+      if (pct <= 0.25) speedFillEl.classList.add("critical");
+      else if (pct <= 0.5) speedFillEl.classList.add("mid");
+    }
+  }
+
+  function showPopup(c, text, color) {
+    var br = CFG.ROWS - 1;
+    var cellRect = cells[br][c].getBoundingClientRect();
+    var wrapRect = gridEl.parentElement.getBoundingClientRect();
+    var el = document.createElement("div");
+    el.className = "popup";
+    el.textContent = text;
+    if (color) el.style.color = color;
+    el.style.left = cellRect.left - wrapRect.left + cellRect.width / 2 + "px";
+    el.style.top = cellRect.top - wrapRect.top + "px";
+    el.style.transform = "translateX(-50%)";
+    gridEl.parentElement.appendChild(el);
+    el.addEventListener("animationend", function () {
+      if (el.parentElement) el.parentElement.removeChild(el);
+    });
+  }
+
+  /* ============================= Game loop (§4.5) ===================== */
+  function gameLoop() {
+    if (!gameActive) return;
+    var now = Date.now();
+    var dt = (now - lastTick) / 1000;
+    lastTick = now;
+
+    /* drain unless frozen */
+    if (now >= frozenUntil) {
+      timeLeft -= CORE.drainRate(level) * dt;
+    }
+
+    /* §4.4 combo auto-reset after 2500ms idle */
+    if (combo > 0 && lastClickTime && now - lastClickTime > 2500) {
+      combo = 0;
+      comboTextEl.textContent = "";
+    }
+
+    if (timeLeft <= 0) {
+      timeLeft = 0;
+      renderTime(now);
+      gameActive = false;
+      setTimeout(showGameOver, 300);
+      return;
+    }
+
+    renderTime(now);
+    rafId = requestAnimationFrame(gameLoop);
+  }
+
+  function startLoop() {
+    lastTick = Date.now();
+    if (rafId) cancelAnimationFrame(rafId);
+    rafId = requestAnimationFrame(gameLoop);
+  }
+
+  /* ============================= Screens ============================== */
+  function startGame() {
+    ensureAudio();
+    grid = [];
+    special = [];
+    for (var r = 0; r < CFG.ROWS; r++) {
+      grid[r] = [];
+      special[r] = [];
+      for (var c = 0; c < CFG.COLS; c++) {
+        grid[r][c] = CORE.rnd();
+        special[r][c] = null;
+      }
+    }
+    queue = [];
+    fillQueue(30);
+    score = 0;
+    level = 1;
+    targetsDone = 0;
+    combo = 0;
+    timeLeft = CFG.TIME_MAX;
+    frozenUntil = 0;
+    lastClickTime = 0;
+    forbiddenNum = null;
+    gameActive = true;
+
+    advanceTarget();
+    repaintAll();
+    renderStats();
+    renderQueue();
+    comboTextEl.textContent = "";
+    renderTime();
+
+    startOverlay.classList.remove("show");
+    gameoverOverlay.classList.remove("show");
+    startLoop();
+  }
+
+  function showGameOver() {
+    if (rafId) cancelAnimationFrame(rafId);
+    var isRecord = score >= bestScore && score > 0;
+    $("final-score").textContent = score;
+    $("final-sub").textContent = isRecord
+      ? "🏆 Yeni rekor! · Level " + level
+      : "Level " + level + " · En yüksek: " + bestScore;
+
+    if (badges > 0) {
+      continueBtn.disabled = false;
+      continueBtn.textContent = "▶️ Devam Et (🏅 " + badges + ")";
+    } else {
+      continueBtn.disabled = true;
+      continueBtn.textContent = "▶️ Devam Et (🏅 yok)";
+    }
+    gameoverOverlay.classList.add("show");
+  }
+
+  function continueGame() {
+    if (badges <= 0) return;
+    badges--;
+    localStorage.setItem(LS_BADGES, String(badges));
+    gameoverOverlay.classList.remove("show");
+
+    /* clear leftover wrong highlight */
+    var br = CFG.ROWS - 1;
+    for (var c = 0; c < CFG.COLS; c++) cells[br][c].classList.remove("wrong");
+
+    /* progress (score/level/grid) is preserved */
+    recalc();
+    if (remaining === 0) advanceTarget();
+
+    timeLeft = CFG.TIME_MAX;
+    combo = 0;
+    frozenUntil = 0;
+    lastClickTime = 0;
+    gameActive = true;
+
+    repaintAll();
+    renderStats();
+    renderQueue();
+    comboTextEl.textContent = "";
+    renderTime();
+    startLoop();
+  }
+
+  function quitGame() {
+    if (rafId) cancelAnimationFrame(rafId);
+    gameActive = false;
+    gameoverOverlay.classList.remove("show");
+    startOverlay.classList.add("show");
+  }
+
+  /* ============================= Wiring =============================== */
+  function toggleMute() {
+    muted = !muted;
+    localStorage.setItem(LS_MUTE, muted ? "1" : "0");
+    $("sound-btn").textContent = muted ? "🔇" : "🔊";
+    if (!muted) ensureAudio();
+  }
+
+  gridEl.addEventListener(
+    "click",
+    function (e) {
+      var cell = e.target.closest ? e.target.closest(".cell") : null;
+      if (!cell) return;
+      var r = parseInt(cell.dataset.r, 10);
+      var c = parseInt(cell.dataset.c, 10);
+      if (r === CFG.ROWS - 1) onCellClick(c);
+    },
+    false
+  );
+
+  $("start-btn").addEventListener("click", startGame);
+  $("replay-btn").addEventListener("click", startGame);
+  continueBtn.addEventListener("click", continueGame);
+  $("quit-btn").addEventListener("click", quitGame);
+  $("sound-btn").addEventListener("click", toggleMute);
+
+  /* pause the drain when the app/tab is backgrounded, resume on return */
+  document.addEventListener("visibilitychange", function () {
+    if (document.hidden) {
+      if (rafId) cancelAnimationFrame(rafId);
+    } else if (gameActive) {
+      startLoop();
+    }
+  });
+
+  /* initial paint */
+  buildGrid();
+  bestScore = num(localStorage.getItem(LS_BEST), 0);
+  badges = num(localStorage.getItem(LS_BADGES), 0);
+  level = 1;
+  score = 0;
+  renderStats();
+  $("sound-btn").textContent = muted ? "🔇" : "🔊";
+})();
