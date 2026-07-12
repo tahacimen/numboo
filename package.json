@@ -1,24 +1,23 @@
-# Dependencies
-node_modules/
-
-# Logs
-*.log
-npm-debug.log*
-
-# OS / editor
-.DS_Store
-Thumbs.db
-.idea/
-.vscode/
-
-# Capacitor native Android project — generated from www/ via `npx cap add
-# android` + `node scripts/apply-android-config.js` (see README). Not committed;
-# CI regenerates it on every build.
-android/
-
-# Test artifacts
-/tmp-screenshots/
-*.png.tmp
-
-# npm lockfile (CI uses `npm install`)
-package-lock.json
+{
+  "name": "numdrop",
+  "version": "1.0.0",
+  "description": "NumDrop — hızlı tempolu bir sayı-bulma refleks oyunu (web + Android/Capacitor).",
+  "private": true,
+  "scripts": {
+    "start": "node scripts/serve.js",
+    "test": "node test/game.test.js",
+    "test:e2e": "node test/browser.test.js",
+    "cap:add": "cap add android && node scripts/apply-android-config.js",
+    "cap:sync": "cap sync android && node scripts/apply-android-config.js",
+    "android:apk": "npm run cap:sync && cd android && ./gradlew assembleDebug",
+    "android:aab": "npm run cap:sync && cd android && ./gradlew bundleRelease"
+  },
+  "dependencies": {
+    "@capacitor/android": "^6.2.1",
+    "@capacitor/core": "^6.2.1"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^6.2.1",
+    "playwright": "^1.61.1"
+  }
+}
