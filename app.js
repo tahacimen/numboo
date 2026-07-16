@@ -15,6 +15,7 @@ let chosenMode = 'standard';
 let fallItems = [];
 let fallLastSpawn = 0;
 let fallItemId = 0;
+let fallNodes = new Map();
 
 const todayKey = () => new Date().toISOString().slice(0, 10);
 
@@ -107,6 +108,7 @@ function renderFallBoard() {
     if (Number.isInteger(id)) handleFallClick(id);
   });
   fallItems = [];
+  fallNodes = new Map();
   fallLastSpawn = performance.now();
   spawnFallWave();
 }
@@ -138,17 +140,23 @@ function updateFallMode(now) {
   if (hitGround) { engine.end('missed-target'); showGameOver(); return; }
   const layer = $('#fall-layer');
   if (!layer) return;
-  layer.innerHTML = '';
+  const activeIds = new Set();
   fallItems.forEach((item) => {
-    const cell = document.createElement('button');
-    cell.className = 'falling-number';
-    cell.textContent = item.number;
+    activeIds.add(item.id);
+    let cell = fallNodes.get(item.id);
+    if (!cell) {
+      cell = document.createElement('button');
+      cell.className = 'falling-number';
+      cell.textContent = item.number;
+      cell.dataset.fallId = String(item.id);
+      layer.append(cell);
+      fallNodes.set(item.id, cell);
+    }
     cell.style.left = `${item.x}%`;
     cell.style.top = `${item.y}%`;
-    cell.dataset.fallId = String(item.id);
     cell.setAttribute('aria-label', `Düşen sayı ${item.number}`);
-    layer.append(cell);
   });
+  fallNodes.forEach((cell, id) => { if (!activeIds.has(id)) { cell.remove(); fallNodes.delete(id); } });
 }
 function handleFallClick(id) {
   const item = fallItems.find((entry) => entry.id === id);
