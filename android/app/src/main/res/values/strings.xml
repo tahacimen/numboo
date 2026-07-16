@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">NumDrop</string>
-    <string name="title_activity_main">NumDrop</string>
+    <string name="app_name">Numboo</string>
+    <string name="title_activity_main">Numboo</string>
     <string name="package_name">com.tahacimen.numdrop</string>
     <string name="custom_url_scheme">com.tahacimen.numdrop</string>
 </resources>

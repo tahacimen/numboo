@@ -1,4 +1,4 @@
-# NumDrop
+# Numboo
 
 Alt sıradaki hedef rakamlarına dokunarak sütunları yukarı kaydırdığın, hızlı karar gerektiren mobil öncelikli mini oyun.
 
