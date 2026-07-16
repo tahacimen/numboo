@@ -8,9 +8,21 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <main class="app">
+  <section id="home-screen" class="home-screen" aria-labelledby="home-title">
+    <div class="home-glow" aria-hidden="true"></div>
+    <div class="home-panel">
+      <p class="eyebrow">NUMDROP</p>
+      <h1 id="home-title">Hızlı düşün.<br><span>Doğru sayıyı yakala.</span></h1>
+      <p class="home-copy">Alt sıradaki hedef sayının tüm örneklerine dokun. Yanlış dokunuş oyunu bitirir.</p>
+      <div class="how-to"><span>01</span> Hedefi bul <span>02</span> Tümünü temizle <span>03</span> Level atla</div>
+      <button id="start-btn" class="start-button" data-action="start" onclick="window.startNumDrop?.()">OYUNA BAŞLA</button>
+      <p class="home-note">Reflekslerini test etmeye hazır mısın?</p>
+    </div>
+  </section>
+
+  <main id="game-screen" class="app" hidden>
     <header class="hud-header">
-      <h1 class="sr-only">NumDrop</h1>
+      <h1 class="sr-only">NumDrop oyun ekranı</h1>
       <section class="stats" aria-label="Oyun istatistikleri">
         <div class="stat-card"><small>🏅 ROZET</small><b id="badges">0</b></div>
         <div class="stat-card"><small>LEVEL</small><b id="level">1</b></div>
@@ -19,38 +31,21 @@
       </section>
       <button id="sound-toggle" class="sound-toggle" data-action="sound" onclick="window.toggleNumDropSound?.()" aria-pressed="true"></button>
     </header>
-
     <p id="combo" class="combo" aria-live="polite"></p>
     <section id="grid" class="grid" role="grid" aria-label="Oyun alanı"></section>
-
     <section class="queue" aria-label="Hedef sırası">
-      <span class="queue-label">SIRA</span>
-      <strong id="target" aria-label="Aktif hedef">0</strong>
-      <span id="next" aria-label="Sıradaki hedef">–</span>
-      <span id="next2" aria-label="Sonraki hedef">–</span>
-      <em>× <i id="remaining">0</i> kaldı</em>
-      <span id="forbidden-wrap" hidden>🚫 Basma: <b id="forbidden"></b></span>
+      <span class="queue-label">SIRA</span><strong id="target" aria-label="Aktif hedef">0</strong><span id="next" aria-label="Sıradaki hedef">–</span><span id="next2" aria-label="Sonraki hedef">–</span>
+      <em>× <i id="remaining">0</i> kaldı</em><span id="forbidden-wrap" hidden>🚫 Basma: <b id="forbidden"></b></span>
     </section>
-
-    <section class="time" aria-label="Kalan süre">
-      <span id="time-label">⏱ SÜRE</span>
-      <div class="time-track"><div id="time-fill"></div></div>
-    </section>
+    <section class="time" aria-label="Kalan süre"><span id="time-label">⏱ SÜRE</span><div class="time-track"><div id="time-fill"></div></div></section>
     <p id="toast" class="toast" aria-live="polite"></p>
   </main>
-
-  <section id="start" class="overlay"><div class="modal welcome-modal">
-    <p class="eyebrow">NUMDROP</p>
-    <h2>Hızlı düşün.<br><span>Doğru sayıyı yakala.</span></h2>
-    <p>Alt sıradaki hedef sayının tüm örneklerine dokun. Yanlış dokunuş oyunu bitirir.</p>
-    <div class="how-to"><span>01</span> Hedefi bul <span>02</span> Tümünü temizle <span>03</span> Level atla</div>
-    <button id="start-btn" data-action="start" onclick="window.startNumDrop?.()">OYUNA BAŞLA</button>
-  </div></section>
 
   <section id="gameover" class="overlay" hidden><div class="modal">
     <p class="eyebrow">TUR TAMAMLANDI</p><h2>Oyun bitti</h2><p>Skorun</p><output id="final-score">0</output>
     <button id="continue" data-action="continue" onclick="window.continueNumDrop?.()">▶ Devam Et</button>
     <button id="restart" class="secondary" data-action="restart" onclick="window.restartNumDrop?.()">↻ Tekrar Oyna</button>
+    <button class="tertiary" data-action="home" onclick="window.goNumDropHome?.()">Ana sayfa</button>
   </div></section>
   <script type="module" src="app.js"></script>
 </body>

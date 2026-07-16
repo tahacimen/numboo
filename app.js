@@ -132,7 +132,8 @@ function startGame() {
   clearTimeout(gameOverTimer);
   engine.start();
   loadPersistentState();
-  $('#start').hidden = true;
+  $('#home-screen').hidden = true;
+  $('#game-screen').hidden = false;
   $('#gameover').hidden = true;
   render();
   startLoop();
@@ -145,6 +146,14 @@ function continueGame() {
   render();
   startLoop();
 }
+function goHome() {
+  cancelAnimationFrame(rafId);
+  clearTimeout(gameOverTimer);
+  engine.end('home');
+  $('#gameover').hidden = true;
+  $('#game-screen').hidden = true;
+  $('#home-screen').hidden = false;
+}
 function toggleSound() {
   soundEnabled = !soundEnabled;
   localStorage.setItem('numdrop_sound', String(soundEnabled));
@@ -155,12 +164,14 @@ window.startNumDrop = startGame;
 window.restartNumDrop = startGame;
 window.continueNumDrop = continueGame;
 window.toggleNumDropSound = toggleSound;
+window.goNumDropHome = goHome;
 document.addEventListener('click', (event) => {
   if (event.target.closest('[onclick]')) return;
   const action = event.target.closest('[data-action]')?.dataset.action;
   if (action === 'start' || action === 'restart') startGame();
   if (action === 'continue') continueGame();
   if (action === 'sound') toggleSound();
+  if (action === 'home') goHome();
 });
 loadPersistentState();
 syncSoundToggle();
