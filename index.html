@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0f0e17">
+  <title>NumDrop</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="app">
+    <header>
+      <h1>Num<span>Drop</span></h1>
+      <div class="stats">
+        <div><small>🏅 Rozet</small><b id="badges">0</b></div><div><small>Level</small><b id="level">1</b></div>
+        <div><small>Skor</small><b id="score">0</b></div><div><small>En yüksek</small><b id="best">0</b></div>
+      </div>
+    </header>
+    <section class="queue" aria-label="Sıra">
+      <span class="queue-label">Sıra</span><strong id="target">0</strong><span id="next">–</span><span id="next2">–</span>
+      <em>× <i id="remaining">0</i> kaldı</em><span id="forbidden-wrap" hidden>🚫 Basma: <b id="forbidden"></b></span>
+    </section>
+    <p id="combo" class="combo" aria-live="polite"></p>
+    <section id="grid" class="grid" aria-label="Oyun alanı"></section>
+    <section class="time"><span id="time-label">⏱ Süre</span><div class="time-track"><div id="time-fill"></div></div></section>
+    <p id="toast" class="toast" aria-live="polite"></p>
+  </main>
+  <section id="start" class="overlay"><div class="modal"><h2>NumDrop</h2><p>Alt sıradaki hedef rakamın tüm örneklerine dokun. Yanlış dokunuş oyunu bitirir.</p><p>Her 5 hedefte level atla; dondurucular süreyi durdurur.</p><button id="start-btn">🎮 Başla</button></div></section>
+  <section id="gameover" class="overlay" hidden><div class="modal"><h2>💥 Bitti</h2><p>Skorun</p><output id="final-score">0</output><button id="continue">▶️ Devam Et</button><button id="restart" class="secondary">🔄 Tekrar Oyna</button></div></section>
+  <section id="pause" class="overlay" hidden><div class="modal"><h2>Duraklatıldı</h2><p>Oyuna kaldığın yerden devam etmeye hazır mısın?</p><button id="resume">▶️ Devam Et</button></div></section>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
