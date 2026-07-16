@@ -18,6 +18,7 @@ header { display: flex; justify-content: space-between; align-items: center; gap
 h1, h2, .cell, .queue strong, output { font-family: ui-rounded, system-ui, sans-serif; font-weight: 900; }
 h1 { margin: 8px 0; color: var(--gold); font-size: 1.8rem; }
 h1 span { color: var(--red); }
+.sound-toggle { width: 42px; min-width: 42px; height: 42px; margin: 0 0 0 auto; padding: 0; border: 1px solid var(--border); background: var(--surface); color: var(--text); font-size: 1.1rem; }
 .stats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px; }
 .stats div { min-width: 58px; padding: 3px 6px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); text-align: center; }
 .stats small { display: block; color: var(--dim); font-size: .58rem; }

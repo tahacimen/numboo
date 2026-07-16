@@ -6,6 +6,8 @@ const engine = new GameEngine();
 let rafId = null;
 let gameOverTimer = null;
 let lastTick = performance.now();
+let audioContext = null;
+let soundEnabled = localStorage.getItem('numdrop_sound') !== 'false';
 
 function loadPersistentState() {
   engine.bestScore = Math.max(0, Number.parseInt(localStorage.getItem('numdrop_best'), 10) || 0);
@@ -14,6 +16,26 @@ function loadPersistentState() {
 function savePersistentState() {
   localStorage.setItem('numdrop_best', String(engine.bestScore));
   localStorage.setItem('numdrop_badges', String(engine.badges));
+}
+function syncSoundToggle() {
+  const control = $('#sound-toggle');
+  control.textContent = soundEnabled ? '🔊' : '🔇';
+  control.setAttribute('aria-label', soundEnabled ? 'Sesi kapat' : 'Sesi aç');
+  control.setAttribute('aria-pressed', String(soundEnabled));
+}
+function playFeedback(kind) {
+  if (navigator.vibrate) navigator.vibrate(kind === 'wrong' ? [35, 40, 60] : 18);
+  if (!soundEnabled || !window.AudioContext) return;
+  audioContext ??= new AudioContext();
+  const oscillator = audioContext.createOscillator();
+  const gain = audioContext.createGain();
+  oscillator.frequency.setValueAtTime(kind === 'wrong' ? 150 : kind === 'freeze' ? 740 : 520, audioContext.currentTime);
+  oscillator.type = kind === 'wrong' ? 'sawtooth' : 'sine';
+  gain.gain.setValueAtTime(.06, audioContext.currentTime);
+  gain.gain.exponentialRampToValueAtTime(.001, audioContext.currentTime + .11);
+  oscillator.connect(gain).connect(audioContext.destination);
+  oscillator.start();
+  oscillator.stop(audioContext.currentTime + .11);
 }
 function renderGrid() {
   gridEl.innerHTML = '';
@@ -63,14 +85,20 @@ function handleClick(column, cell) {
   const outcome = engine.click(column);
   if (outcome.type === 'ignored') return;
   if (outcome.type === 'gameover') {
+    playFeedback('wrong');
     cell.classList.add('wrong');
     renderHud();
     clearTimeout(gameOverTimer);
     gameOverTimer = setTimeout(showGameOver, 260);
     return;
   }
-  if (outcome.type === 'freeze') showToast('❄️ +50');
-  else showToast(`+${outcome.points}${outcome.multiplier > 1 ? ` ×${outcome.multiplier}` : ''}`);
+  if (outcome.type === 'freeze') {
+    playFeedback('freeze');
+    showToast('❄️ +50');
+  } else {
+    playFeedback('correct');
+    showToast(`+${outcome.points}${outcome.multiplier > 1 ? ` ×${outcome.multiplier}` : ''}`);
+  }
   if (engine.score > engine.bestScore) engine.bestScore = engine.score;
   savePersistentState();
   render();
@@ -117,15 +145,24 @@ function continueGame() {
   render();
   startLoop();
 }
+function toggleSound() {
+  soundEnabled = !soundEnabled;
+  localStorage.setItem('numdrop_sound', String(soundEnabled));
+  syncSoundToggle();
+  if (soundEnabled) playFeedback('correct');
+}
 window.startNumDrop = startGame;
 window.restartNumDrop = startGame;
 window.continueNumDrop = continueGame;
+window.toggleNumDropSound = toggleSound;
 document.addEventListener('click', (event) => {
   if (event.target.closest('[onclick]')) return;
   const action = event.target.closest('[data-action]')?.dataset.action;
   if (action === 'start' || action === 'restart') startGame();
   if (action === 'continue') continueGame();
+  if (action === 'sound') toggleSound();
 });
 loadPersistentState();
+syncSoundToggle();
 engine.gameActive = false;
 render();
