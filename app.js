@@ -112,7 +112,13 @@ function renderFallBoard() {
 }
 function spawnFallItem(target = false, offset = -12) {
   const number = target ? engine.currentTarget : (() => { let value = Math.floor(Math.random() * 10); while (value === engine.currentTarget) value = Math.floor(Math.random() * 10); return value; })();
-  fallItems.push({ id: ++fallItemId, number, x: 5 + Math.random() * 76, y: offset });
+  fallItems.push({ id: ++fallItemId, number, x: pickFallLane(offset), y: offset });
+}
+function pickFallLane(y) {
+  const lanes = [9, 25, 41, 57, 73, 89];
+  const safe = lanes.filter((lane) => !fallItems.some((item) => Math.abs(item.x - lane) < 1 && Math.abs(item.y - y) < 18));
+  const choices = safe.length ? safe : lanes;
+  return choices[Math.floor(Math.random() * choices.length)];
 }
 function spawnFallWave() {
   const count = 2 + Math.floor(Math.random() * 2);
