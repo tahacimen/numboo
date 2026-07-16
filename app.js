@@ -102,6 +102,10 @@ function renderGrid() {
 function renderFallBoard() {
   gridEl.classList.add('fall-board');
   gridEl.innerHTML = '<div id="fall-layer" class="fall-layer" aria-label="Düşen sayılar"></div><p class="fall-hint">HEDEFİ YAKALA · YERE DEĞDİRME</p>';
+  $('#fall-layer').addEventListener('pointerdown', (event) => {
+    const id = Number(event.target.closest('[data-fall-id]')?.dataset.fallId);
+    if (Number.isInteger(id)) handleFallClick(id);
+  });
   fallItems = [];
   fallLastSpawn = performance.now();
   spawnFallItem(true);
@@ -127,8 +131,8 @@ function updateFallMode(now) {
     cell.textContent = item.number;
     cell.style.left = `${item.x}%`;
     cell.style.top = `${item.y}%`;
+    cell.dataset.fallId = String(item.id);
     cell.setAttribute('aria-label', `Düşen sayı ${item.number}`);
-    cell.addEventListener('click', () => handleFallClick(item.id));
     layer.append(cell);
   });
 }
