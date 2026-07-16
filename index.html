@@ -3,24 +3,37 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#090b17">
+  <meta name="theme-color" content="#050b2d">
   <title>Numboo</title>
   <link rel="stylesheet" href="styles.css">
+  <style>
+    :root { --space-art: url("assets/numboo-neon-space-bg.png"); }
+    body { background: #03051d var(--space-art) center top / cover fixed no-repeat; }
+    .home-screen { background: linear-gradient(180deg, #06143b66, #03051dbf), var(--space-art) center / cover no-repeat; }
+    .app { min-height: 100dvh; background: linear-gradient(#06143b66, #03051db3), var(--space-art) center / cover fixed no-repeat; }
+    /* Reference-inspired composition: fewer panels, more breathing room for the arcade logo and play action. */
+    .home-panel { width: min(100%, 460px); padding-top: 68px; }
+    .home-panel h1, .home-copy, .home-note, .daily-card, .progress-row { display: none; }
+    .brand-mark { font-size: clamp(84px, 23vw, 122px); }
+    .mode-picker { width: min(100%, 330px); margin: 42px auto 20px; background: linear-gradient(145deg, #102d77e8, #07143fe8); }
+    .start-button { width: min(100%, 360px); min-height: 104px; border-radius: 34px; font-size: 31px; }
+    .shop { width: min(100%, 330px); margin: 27px auto 0; border-color: #2d91ec; background: #071849bb; }
+    .float-number { filter: saturate(1.25) drop-shadow(0 10px 13px #02051dcc); }
+  </style>
 </head>
 <body>
   <section id="home-screen" class="home-screen" aria-labelledby="home-title">
-    <div class="home-glow" aria-hidden="true"></div>
+    <span class="float-number n-one" aria-hidden="true">1</span><span class="float-number n-three" aria-hidden="true">3</span><span class="float-number n-eight" aria-hidden="true">8</span><span class="float-number n-two" aria-hidden="true">2</span><span class="float-number n-six" aria-hidden="true">6</span><span class="float-number n-four" aria-hidden="true">4</span>
     <div class="home-panel">
-      <p class="eyebrow">NUMBOO</p>
-      <h1 id="home-title">Hızlı düşün.<br><span>Doğru sayıyı yakala.</span></h1>
-      <p class="home-copy">Alt sıradaki hedef sayının tüm örneklerine dokun. Yanlış dokunuş oyunu bitirir.</p>
-      <section class="mode-picker" aria-label="Oyun modu seçimi"><b>OYUN MODU</b><div><button class="selected" data-action="mode" data-mode="standard" onclick="window.selectNumDropMode?.('standard')">▣ Standart<small>Alt sıra</small></button><button data-action="mode" data-mode="fall" onclick="window.selectNumDropMode?.('fall')">↓ Akış<small>Düşen sayılar</small></button></div><p id="mode-description">Alt sıradaki hedef sayıların hepsini temizle.</p></section>
-      <div class="how-to"><span>01</span> Hedefi bul <span>02</span> Tümünü temizle <span>03</span> Level atla</div>
-      <button id="start-btn" class="start-button" data-action="start" onclick="window.startNumDrop?.()">OYUNA BAŞLA</button>
-      <p class="home-note">Reflekslerini test etmeye hazır mısın?</p>
-      <section class="daily-card" aria-label="Günlük meydan okuma"><b>GÜNLÜK GÖREV</b><span id="daily-progress">0/3 hedef</span><small>3 hedef bitir, +1 rozet kazan</small></section>
-      <section class="progress-row" aria-label="İlerleme"><span>🏅 <b id="home-badges">0</b> rozet</span><span>🏆 <b id="achievement-count">0/3 açıldı</b></span></section>
-      <section class="shop" aria-label="Rozet marketi"><b>GÜÇLENDİRİCİ MARKETİ · 1 🏅</b><div class="shop-items"><button data-action="buy" data-type="shield" onclick="window.buyNumDropPower?.('shield')">🛡 Kalkan</button><button data-action="buy" data-type="scan" onclick="window.buyNumDropPower?.('scan')">🔍 Tarayıcı</button><button data-action="buy" data-type="time" onclick="window.buyNumDropPower?.('time')">⏱ +15 sn</button></div></section>
+      <p class="brand-mark" aria-label="Numboo">num<span>boo</span></p>
+      <h1 id="home-title">Sayıları yakala,<br><span>rekoru kap!</span></h1>
+      <p class="home-copy">Hedef sıradaki sayıları hızla bul, hepsini temizle ve yeni seviyeye çık.</p>
+      <section class="mode-picker" aria-label="Oyun modu seçimi"><b>OYUN MODU</b><div><button class="selected" data-action="mode" data-mode="standard" onclick="window.selectNumDropMode?.('standard')">▣ Standart<small>Hedef satırı</small></button><button data-action="mode" data-mode="fall" onclick="window.selectNumDropMode?.('fall')">↓ Akış<small>Düşen sayılar</small></button></div><p id="mode-description">Alt sıradaki hedef sayıların hepsini temizle.</p></section>
+      <button id="start-btn" class="start-button" data-action="start" onclick="window.startNumDrop?.()"><span>▶</span> OYNA</button>
+      <p class="home-note">Her doğru seçim seni bir sonraki seviyeye taşır.</p>
+      <section class="daily-card" aria-label="Günlük meydan okuma"><b>🏆 GÜNLÜK GÖREV</b><span id="daily-progress">0/3 hedef</span><small>3 hedefi tamamla, +1 rozet kazan</small></section>
+      <section class="progress-row" aria-label="İlerleme"><span>🏅 <b id="home-badges">0</b> rozet</span><span>⭐ <b id="achievement-count">0/3 açıldı</b></span></section>
+      <section class="shop" aria-label="Rozet marketi"><b>GÜÇLENDİRİCİLER · 1 🏅</b><div class="shop-items"><button data-action="buy" data-type="shield" onclick="window.buyNumDropPower?.('shield')">🛡<small>Kalkan</small></button><button data-action="buy" data-type="scan" onclick="window.buyNumDropPower?.('scan')">🔍<small>Tarayıcı</small></button><button data-action="buy" data-type="time" onclick="window.buyNumDropPower?.('time')">⏱<small>+15 sn</small></button></div></section>
     </div>
   </section>
 
@@ -48,10 +61,10 @@
   </main>
 
   <section id="gameover" class="overlay" hidden><div class="modal">
-    <p class="eyebrow">TUR TAMAMLANDI</p><h2>Oyun bitti</h2><p>Skorun</p><output id="final-score">0</output>
+    <p class="eyebrow">TUR TAMAMLANDI</p><h2>TEKRAR<br><span>DENE!</span></h2><p>PUANIN</p><output id="final-score">0</output>
     <button id="continue" data-action="continue" onclick="window.continueNumDrop?.()">▶ Devam Et</button>
     <button id="restart" class="secondary" data-action="restart" onclick="window.restartNumDrop?.()">↻ Tekrar Oyna</button>
-    <button class="tertiary" data-action="home" onclick="window.goNumDropHome?.()">Ana sayfa</button>
+    <button class="tertiary" data-action="home" onclick="window.goNumDropHome?.()">⌂ Ana Menü</button>
   </div></section>
   <script type="module" src="app.js"></script>
 </body>
