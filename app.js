@@ -108,19 +108,25 @@ function renderFallBoard() {
   });
   fallItems = [];
   fallLastSpawn = performance.now();
-  spawnFallItem(true);
+  spawnFallWave();
 }
-function spawnFallItem(forceTarget = false) {
-  const number = forceTarget || Math.random() < .38 ? engine.currentTarget : Math.floor(Math.random() * 10);
-  fallItems.push({ id: ++fallItemId, number, x: 5 + Math.random() * 76, y: -12 });
+function spawnFallItem(target = false, offset = -12) {
+  const number = target ? engine.currentTarget : (() => { let value = Math.floor(Math.random() * 10); while (value === engine.currentTarget) value = Math.floor(Math.random() * 10); return value; })();
+  fallItems.push({ id: ++fallItemId, number, x: 5 + Math.random() * 76, y: offset });
+}
+function spawnFallWave() {
+  const count = 2 + Math.floor(Math.random() * 2);
+  for (let index = 0; index < count; index += 1) spawnFallItem(true, -12 - index * 18);
+  engine.remaining = count;
 }
 function updateFallMode(now) {
   if (!engine.gameActive) return;
   const dt = Math.min(60, now - lastTick);
-  if (now - fallLastSpawn > 980) { spawnFallItem(!fallItems.some((item) => item.number === engine.currentTarget)); fallLastSpawn = now; }
+  if (now - fallLastSpawn > 980) { spawnFallItem(false); fallLastSpawn = now; }
   fallItems.forEach((item) => { item.y += dt * .0105; });
   const hitGround = fallItems.some((item) => item.number === engine.currentTarget && item.y >= 88);
   fallItems = fallItems.filter((item) => item.y < 102);
+  engine.remaining = fallItems.filter((item) => item.number === engine.currentTarget).length;
   if (hitGround) { engine.end('missed-target'); showGameOver(); return; }
   const layer = $('#fall-layer');
   if (!layer) return;
@@ -143,13 +149,14 @@ function handleFallClick(id) {
   const { points, multiplier } = engine.pointsAt(Date.now());
   engine.score += points;
   fallItems = fallItems.filter((entry) => entry.id !== id);
-  const outcome = engine.finishTarget();
+  engine.remaining = fallItems.filter((entry) => entry.number === engine.currentTarget).length;
+  const outcome = engine.remaining === 0 ? engine.finishTarget() : { completedTarget: false };
   if (engine.score > engine.bestScore) engine.bestScore = engine.score;
   recordProgress(outcome);
   showToast(`+${points}${multiplier > 1 ? ` ×${multiplier}` : ''}`);
   renderHud();
   renderProgress();
-  spawnFallItem(true);
+  if (outcome.completedTarget) spawnFallWave();
 }
 function renderHud() {
   $('#target').textContent = engine.currentTarget;
