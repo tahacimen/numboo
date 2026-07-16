@@ -32,6 +32,7 @@
   - `special[r][c]` (örn. dondurucu işareti) de aynı şekilde bir satır aşağı taşınır.
   - En üst satıra (`r=0`) yeni rastgele bir rakam (`rnd()`, 0-9 arası) girer, `special[0][c] = null` (yeni giren hücre asla özel değildir).
   - Sonuç: tıklanan sütun görsel olarak bir satır aşağı "düşer", tepeden yeni bir rakam belirir. Bu, "slide-in" animasyonu ile (bkz. Bölüm 7) desteklenir.
+  - **State kuralı:** Her `shiftColumn(c)` çağrısından sonra, animasyondan bağımsız olarak `recalc()` çalıştırılır. Hedef tamamlama kararı yalnızca kaydırma sonrasındaki güncel alt satıra göre verilir; eski `remaining` değeri kullanılmaz.
 - **Hücre boyutlandırma / aspect-ratio:**
   - Grid konteyneri: genişlik `%100`, `max-width: 440px`, `aspect-ratio: 6 / 8` (COLS/ROWS oranı — kare değil, dikey dikdörtgen).
   - `display: grid; grid-template-columns: repeat(6, 1fr); grid-template-rows: repeat(8, 1fr); gap: 6px;`
@@ -97,12 +98,23 @@
 - Tıklanan hücre dondurucu (`freeze`) işaretliyse, değeri ne olursa olsun bu **her zaman güvenlidir** ve yanlış tıklama sayılmaz (bkz. 4.8) — bu kontrol yanlış/doğru kontrolünden **önce** yapılır.
 - Doğru tıklamada: skor, süre, combo güncellemeleri yapılır (bkz. 4.3-4.4), sütun kaydırılır (`shiftColumn`), tüm sütun yeniden boyanır (`paintCell` ile animasyonlu), hedef tamamlandıysa level kontrolü ve yeni hedef ataması yapılır.
 
+#### Tıklama akışının atomik sırası
+
+Her dokunuş, yalnızca `gameActive === true` iken ve tek bir senkron state güncellemesi olarak işlenir. Geçmiş animasyonların veya gecikmeli callback'lerin yeni oyunun state'ini değiştirmesine izin verilmez.
+
+1. Dondurucu hücreye tıklanmışsa güvenli toplama uygulanır, hücre kaydırılır ve hemen `recalc()` çalıştırılır. Dondurucu artık güncel hedef rakamını taşıyorsa bu toplama ayrıca bir doğru hedef tıklaması sayılır; böylece hedef sayacı eksilmeden hedef rakamın grid'den çıkması engellenir.
+2. Normal hücre hedef değilse tekil `endGame(reason)` çağrılır. Bu fonksiyon `gameActive` kontrolüyle idempotenttir, aktif RAF'ı ve bekleyen oyun-sonu zamanlayıcılarını iptal eder; overlay'i yalnızca bir kez açar.
+3. Normal hücre hedefse skor/süre/combo güncellenir, sütun kaydırılır ve `recalc()` yapılır.
+4. `remaining === 0` ise sırasıyla `targetsDone++`, gerekliyse `levelUp()`, `queue.shift()` ve `advanceTarget()` çağrılır. Böylece level 2'nin ilk hedefi de yasak-rakam kuralıyla oluşturulur.
+5. `maybeSpawnFreeze()` yalnızca yeni hedef ve varsa yeni yasak rakam belirlendikten sonra çağrılır; uygunluk filtresi güncel hedefi kullanır.
+
 ### 4.3 Skor Hesaplama Formülü
 
 Her doğru tıklamada:
 
 ```
-delta = lastClickTime ? (now - lastClickTime) : 800   // ms cinsinden, önceki tıklamadan bu yana geçen süre
+rawDelta = lastClickTime ? (now - lastClickTime) : 800 // ms cinsinden, önceki tıklamadan bu yana geçen süre
+delta = max(80, rawDelta)                              // aynı zaman damgası/çoklu dokunuş için alt sınır
 base  = max(10, floor(900 / (delta/1000 + 0.4)))       // hıza dayalı temel puan
 mult  = min(COMBO_CAP, 1 + floor(combo / 4))           // combo çarpanı
 bonus = base * mult
@@ -110,6 +122,7 @@ score += bonus
 ```
 
 - İlk tıklamada (`lastClickTime` henüz yoksa) `delta` varsayılan olarak 800ms kabul edilir.
+- `delta` 80ms'nin altına inemez; bu, aynı zaman damgalı çoklu dokunuşların veya otomasyonun skoru anormal biçimde şişirmesini önler.
 - `base` formülü: ne kadar hızlı tıklarsan (delta küçükse) o kadar yüksek puan alırsın; formül `900 / (saniye + 0.4)` şeklinde ters orantılıdır, minimum 10 puan garantilenir.
 - Skor `bestScore`'u geçerse anında `localStorage.numdrop_best` güncellenir.
 - Ekranda skor popup'ı gösterilir: çarpan >1 ise `"+{bonus} x{mult}"`, değilse `"+{bonus}"`.
@@ -172,7 +185,7 @@ score += bonus
 
 - `FREEZE_DURATION = 3` (saniye) — dondurmanın süre erimesini durdurma süresi.
 - `FREEZE_SPAWN_CHANCE = 0.18` (%18) — bir hedef tamamlandığında dondurucunun ortaya çıkma olasılığı.
-- `maybeSpawnFreeze()` — her hedef tamamlandığında çağrılır:
+- `maybeSpawnFreeze()` — hedef tamamlama akışında **yeni hedef ve yasak rakam atandıktan sonra** çağrılır:
   1. `Math.random() > FREEZE_SPAWN_CHANCE` ise çıkış yapılmaz (spawn olmaz).
   2. Alt satırda, **hedef olmayan, yasak rakam olmayan ve zaten özel işaretli olmayan** hücreler arasından rastgele biri seçilir.
   3. Uygun hücre yoksa spawn iptal edilir.
@@ -196,7 +209,8 @@ score += bonus
   - Yanlış tıklama görsel vurgusu (`wrong` class) temizlenir.
   - Hedefin hâlâ alt satırda olup olmadığı kontrol edilir (`recalc()`); yoksa `advanceTarget()` ile yeni hedef atanır.
   - `timeLeft` tam doldurulur (`TIME_MAX`), `combo = 0`, `frozenUntil = 0`, `lastClickTime = 0` sıfırlanır.
-  - Oyun döngüsü yeniden başlatılır.
+  - `lastTick = performance.now()` atanır; böylece oyun sonu ekranında geçen süre ilk karede süre çubuğundan düşmez.
+  - Eski RAF ve gecikmeli callback'ler iptal edilir; oyun döngüsü yalnızca tek bir RAF isteğiyle yeniden başlatılır.
 
 ---
 
@@ -337,6 +351,11 @@ score += bonus
 ### 9.3 Safe-Area / Notch Desteği
 - Mevcut kodda `env(safe-area-inset-top)` ve `env(safe-area-inset-bottom)` zaten kullanılıyor; native tarafa geçişte bu, platformun kendi safe-area API'leri ile eşleştirilmeli (Capacitor: `SafeArea` plugin veya CSS env() WebView içinde de çalışır; React Native: `SafeAreaView`/`react-native-safe-area-context`).
 - Ekranın üst/alt kenarlarına yakın interaktif elemanlar (header, alt overlay butonları) çentik/ev çubuğu (home indicator) ile çakışmamalı.
+
+### 9.3.1 Uygulama Yaşam Döngüsü ve Duraklatma
+- Uygulama arka plana alındığında, ekran kilitlendiğinde veya görünürlük kaybolduğunda oyun açıkça duraklatılmalıdır: RAF iptal edilir, süre erimez ve dokunmalar devre dışı kalır.
+- Uygulama tekrar görünür olduğunda otomatik oynatmak yerine bir "Devam Et" pause overlay'i gösterilir. Oyuncu onay verdiğinde `lastTick = performance.now()` atanır ve yalnızca tek bir oyun döngüsü başlatılır.
+- Bu davranış, arka plana alma ile süre kaybı ya da ilk karede büyük `dt` nedeniyle anlık oyun sonu oluşmasını engeller.
 
 ### 9.4 Ekran Yönü Kilidi
 - Oyun **yalnızca dikey (portrait)** modda tasarlanmıştır (grid `aspect-ratio: 6/8`). Android manifestinde `android:screenOrientation="portrait"` kilidi uygulanmalı.
