@@ -98,6 +98,7 @@ function startGame() {
   loadPersistentState();
   paused = false;
   $('#start').hidden = true;
+  $('#pause').hidden = true;
   $('#gameover').hidden = true;
   render();
   startLoop();
@@ -110,7 +111,7 @@ function continueGame() {
   startLoop();
 }
 function pauseForVisibility() {
-  if (document.hidden && engine.gameActive) {
+  if (document.hidden && engine.gameActive && !$('#start').hidden) {
     paused = true;
     cancelAnimationFrame(rafId);
     $('#pause').hidden = false;
@@ -125,11 +126,17 @@ function resumeGame() {
   startLoop();
 }
 
-$('#start-btn').addEventListener('click', startGame);
-$('#restart').addEventListener('click', startGame);
-$('#continue').addEventListener('click', continueGame);
-$('#resume').addEventListener('click', resumeGame);
-document.addEventListener('visibilitychange', pauseForVisibility);
+window.startNumDrop = startGame;
+window.restartNumDrop = startGame;
+window.continueNumDrop = continueGame;
+window.resumeNumDrop = resumeGame;
+document.addEventListener('click', (event) => {
+  if (event.target.closest('[onclick]')) return;
+  const action = event.target.closest('[data-action]')?.dataset.action;
+  if (action === 'start' || action === 'restart') startGame();
+  if (action === 'continue') continueGame();
+  if (action === 'resume') resumeGame();
+});
 loadPersistentState();
 engine.gameActive = false;
 render();
