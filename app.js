@@ -112,14 +112,14 @@ function renderFallBoard() {
 }
 function spawnFallItem(forceTarget = false) {
   const number = forceTarget || Math.random() < .38 ? engine.currentTarget : Math.floor(Math.random() * 10);
-  fallItems.push({ id: ++fallItemId, number, x: 5 + Math.random() * 76, y: -12, target: number === engine.currentTarget });
+  fallItems.push({ id: ++fallItemId, number, x: 5 + Math.random() * 76, y: -12 });
 }
 function updateFallMode(now) {
   if (!engine.gameActive) return;
   const dt = Math.min(60, now - lastTick);
-  if (now - fallLastSpawn > 980) { spawnFallItem(fallItems.filter((item) => item.target).length === 0); fallLastSpawn = now; }
+  if (now - fallLastSpawn > 980) { spawnFallItem(!fallItems.some((item) => item.number === engine.currentTarget)); fallLastSpawn = now; }
   fallItems.forEach((item) => { item.y += dt * .0105; });
-  const hitGround = fallItems.some((item) => item.target && item.y >= 88);
+  const hitGround = fallItems.some((item) => item.number === engine.currentTarget && item.y >= 88);
   fallItems = fallItems.filter((item) => item.y < 102);
   if (hitGround) { engine.end('missed-target'); showGameOver(); return; }
   const layer = $('#fall-layer');
@@ -127,7 +127,7 @@ function updateFallMode(now) {
   layer.innerHTML = '';
   fallItems.forEach((item) => {
     const cell = document.createElement('button');
-    cell.className = `falling-number${item.target ? ' target-fall' : ''}`;
+    cell.className = 'falling-number';
     cell.textContent = item.number;
     cell.style.left = `${item.x}%`;
     cell.style.top = `${item.y}%`;
@@ -139,7 +139,7 @@ function updateFallMode(now) {
 function handleFallClick(id) {
   const item = fallItems.find((entry) => entry.id === id);
   if (!item || !engine.gameActive) return;
-  if (!item.target) { engine.end('wrong'); showGameOver(); return; }
+  if (item.number !== engine.currentTarget) { engine.end('wrong'); showGameOver(); return; }
   const { points, multiplier } = engine.pointsAt(Date.now());
   engine.score += points;
   fallItems = fallItems.filter((entry) => entry.id !== id);
