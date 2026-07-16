@@ -128,8 +128,8 @@ function spawnFallWave() {
 function updateFallMode(now) {
   if (!engine.gameActive) return;
   const dt = Math.min(60, now - lastTick);
-  const speed = .0065 + Math.min(.012, engine.targetsDone * .00055);
-  const spawnDelay = Math.max(420, 1100 - engine.targetsDone * 45);
+  const speed = .012 + Math.min(.018, engine.targetsDone * .0008);
+  const spawnDelay = Math.max(320, 820 - engine.targetsDone * 38);
   if (now - fallLastSpawn > spawnDelay) { spawnFallItem(false); fallLastSpawn = now; }
   fallItems.forEach((item) => { item.y += dt * speed; });
   const hitGround = fallItems.some((item) => item.number === engine.currentTarget && item.y >= 88);
