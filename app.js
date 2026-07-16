@@ -8,14 +8,50 @@ let gameOverTimer = null;
 let lastTick = performance.now();
 let audioContext = null;
 let soundEnabled = localStorage.getItem('numdrop_sound') !== 'false';
+let inventory = { shield: 0, scan: 0, time: 0 };
+let daily = { date: '', targets: 0, claimed: false };
+let achievements = [];
+
+const todayKey = () => new Date().toISOString().slice(0, 10);
 
 function loadPersistentState() {
   engine.bestScore = Math.max(0, Number.parseInt(localStorage.getItem('numdrop_best'), 10) || 0);
   engine.badges = Math.max(0, Number.parseInt(localStorage.getItem('numdrop_badges'), 10) || 0);
+  inventory = { ...inventory, ...(JSON.parse(localStorage.getItem('numdrop_inventory') || '{}')) };
+  daily = { ...daily, ...(JSON.parse(localStorage.getItem('numdrop_daily') || '{}')) };
+  if (daily.date !== todayKey()) daily = { date: todayKey(), targets: 0, claimed: false };
+  achievements = JSON.parse(localStorage.getItem('numdrop_achievements') || '[]');
 }
 function savePersistentState() {
   localStorage.setItem('numdrop_best', String(engine.bestScore));
   localStorage.setItem('numdrop_badges', String(engine.badges));
+  localStorage.setItem('numdrop_inventory', JSON.stringify(inventory));
+  localStorage.setItem('numdrop_daily', JSON.stringify(daily));
+  localStorage.setItem('numdrop_achievements', JSON.stringify(achievements));
+}
+function renderProgress() {
+  const homeBadges = $('#home-badges');
+  if (homeBadges) homeBadges.textContent = engine.badges;
+  const dailyText = $('#daily-progress');
+  if (dailyText) dailyText.textContent = daily.claimed ? 'Tamamlandı ✓' : `${daily.targets}/3 hedef`;
+  const achievementText = $('#achievement-count');
+  if (achievementText) achievementText.textContent = `${achievements.length}/3 açıldı`;
+  ['shield', 'scan', 'time'].forEach((type) => {
+    const count = $(`#power-${type}-count`);
+    if (count) count.textContent = type === 'shield' ? engine.shieldCharges : inventory[type];
+    const button = $(`[data-power="${type}"]`);
+    if (button) button.disabled = type === 'shield' || inventory[type] === 0 || !engine.gameActive;
+  });
+}
+function recordProgress(outcome) {
+  if (outcome.completedTarget && !daily.claimed) {
+    daily.targets += 1;
+    if (daily.targets >= 3) { daily.claimed = true; engine.badges += 1; showToast('GÜNLÜK GÖREV +1 ROZET'); }
+  }
+  if (engine.score >= 1000 && !achievements.includes('score')) achievements.push('score');
+  if (engine.level >= 2 && !achievements.includes('level')) achievements.push('level');
+  if (engine.combo >= 6 && !achievements.includes('combo')) achievements.push('combo');
+  savePersistentState();
 }
 function syncSoundToggle() {
   const control = $('#sound-toggle');
@@ -49,6 +85,7 @@ function renderGrid() {
       cell.disabled = !bottom || !engine.gameActive;
       cell.setAttribute('aria-label', bottom ? `Sütun ${col + 1}, sayı ${value}` : `Sayı ${value}`);
       if (bottom && value === engine.forbiddenNum) cell.classList.add('forbidden');
+      if (bottom && value === engine.currentTarget && Date.now() < engine.scanUntil) cell.classList.add('scan-target');
       if (engine.special[row][col] === 'freeze') cell.classList.add('freeze');
       if (bottom) cell.addEventListener('click', () => handleClick(col, cell));
       gridEl.append(cell);
@@ -92,6 +129,13 @@ function handleClick(column, cell) {
     gameOverTimer = setTimeout(showGameOver, 260);
     return;
   }
+  if (outcome.type === 'shield') {
+    playFeedback('freeze');
+    showToast('KALKAN SENİ KORUDU!');
+    savePersistentState();
+    render();
+    return;
+  }
   if (outcome.type === 'freeze') {
     playFeedback('freeze');
     showToast('❄️ +50');
@@ -100,7 +144,7 @@ function handleClick(column, cell) {
     showToast(`+${outcome.points}${outcome.multiplier > 1 ? ` ×${outcome.multiplier}` : ''}`);
   }
   if (engine.score > engine.bestScore) engine.bestScore = engine.score;
-  savePersistentState();
+  recordProgress(outcome);
   render();
   if (outcome.leveledUp) showToast(`LEVEL ${engine.level}!`);
 }
@@ -132,10 +176,14 @@ function startGame() {
   clearTimeout(gameOverTimer);
   engine.start();
   loadPersistentState();
+  engine.shieldCharges = inventory.shield;
+  inventory.shield = 0;
+  savePersistentState();
   $('#home-screen').hidden = true;
   $('#game-screen').hidden = false;
   $('#gameover').hidden = true;
   render();
+  renderProgress();
   startLoop();
 }
 function continueGame() {
@@ -144,6 +192,7 @@ function continueGame() {
   savePersistentState();
   $('#gameover').hidden = true;
   render();
+  renderProgress();
   startLoop();
 }
 function goHome() {
@@ -160,11 +209,30 @@ function toggleSound() {
   syncSoundToggle();
   if (soundEnabled) playFeedback('correct');
 }
+function buyPower(type) {
+  if (!['shield', 'scan', 'time'].includes(type) || engine.badges < 1) { showToast('1 rozet gerekli'); return; }
+  engine.badges -= 1;
+  inventory[type] += 1;
+  savePersistentState();
+  renderProgress();
+  showToast('Güçlendirici hazır!');
+}
+function usePower(type) {
+  if (type === 'shield' || !engine.gameActive || !inventory[type]) return;
+  inventory[type] -= 1;
+  engine.usePowerup(type);
+  savePersistentState();
+  render();
+  renderProgress();
+  showToast(type === 'scan' ? 'HEDEFLER GÖSTERİLİYOR!' : '+15 SANİYE');
+}
 window.startNumDrop = startGame;
 window.restartNumDrop = startGame;
 window.continueNumDrop = continueGame;
 window.toggleNumDropSound = toggleSound;
 window.goNumDropHome = goHome;
+window.buyNumDropPower = buyPower;
+window.useNumDropPower = usePower;
 document.addEventListener('click', (event) => {
   if (event.target.closest('[onclick]')) return;
   const action = event.target.closest('[data-action]')?.dataset.action;
@@ -172,8 +240,11 @@ document.addEventListener('click', (event) => {
   if (action === 'continue') continueGame();
   if (action === 'sound') toggleSound();
   if (action === 'home') goHome();
+  if (action === 'buy') buyPower(event.target.closest('[data-type]')?.dataset.type);
+  if (action === 'power') usePower(event.target.closest('[data-power]')?.dataset.power);
 });
 loadPersistentState();
 syncSoundToggle();
 engine.gameActive = false;
 render();
+renderProgress();

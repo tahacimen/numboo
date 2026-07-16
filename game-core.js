@@ -11,6 +11,8 @@ export const CONFIG = Object.freeze({
   COMBO_CAP: 5,
   COMBO_TIMEOUT_MS: 2500,
   MIN_SCORE_DELTA_MS: 80,
+  SCAN_DURATION_MS: 5000,
+  TIME_BOOST: 15,
 });
 
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
@@ -38,6 +40,8 @@ export class GameEngine {
     this.combo = 0;
     this.lastClickTime = 0;
     this.frozenUntil = 0;
+    this.scanUntil = 0;
+    this.shieldCharges = 0;
     this.timeLeft = TIME_MAX;
     this.gameActive = true;
     this.forbiddenNum = null;
@@ -131,7 +135,14 @@ export class GameEngine {
       return { type: 'freeze', points: 50, ...targetProgress };
     }
 
-    if (!wasTarget) return { type: 'gameover', ...this.end('wrong') };
+    if (!wasTarget) {
+      if (this.shieldCharges > 0) {
+        this.shieldCharges -= 1;
+        this.shiftColumn(column);
+        return { type: 'shield', remaining: this.remaining };
+      }
+      return { type: 'gameover', ...this.end('wrong') };
+    }
 
     const { points, multiplier } = this.pointsAt(now);
     this.score += points;
@@ -161,5 +172,12 @@ export class GameEngine {
     this.gameActive = true;
     if (this.recalc() === 0) this.advanceTarget();
     return true;
+  }
+
+  usePowerup(type, now = Date.now()) {
+    if (!this.gameActive) return false;
+    if (type === 'scan') this.scanUntil = Math.max(this.scanUntil, now) + CONFIG.SCAN_DURATION_MS;
+    if (type === 'time') this.timeLeft = clamp(this.timeLeft + CONFIG.TIME_BOOST, 0, CONFIG.TIME_MAX);
+    return type === 'scan' || type === 'time';
   }
 }

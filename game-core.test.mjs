@@ -18,6 +18,27 @@ const fixed = (value) => () => value;
 {
   const game = new GameEngine(fixed(0));
   game.grid[CONFIG.ROWS - 1] = [1, 2, 3, 4, 5, 6];
+  game.currentTarget = 1;
+  game.recalc();
+  game.shieldCharges = 1;
+  const result = game.click(1, 1000);
+  assert.equal(result.type, 'shield');
+  assert.equal(game.gameActive, true, 'Kalkan yanlış dokunuşu affetmeli');
+  assert.equal(game.shieldCharges, 0);
+}
+
+{
+  const game = new GameEngine(fixed(0));
+  game.timeLeft = 50;
+  assert.equal(game.usePowerup('time', 1000), true);
+  assert.equal(game.timeLeft, 65);
+  assert.equal(game.usePowerup('scan', 1000), true);
+  assert.equal(game.scanUntil, 1000 + CONFIG.SCAN_DURATION_MS);
+}
+
+{
+  const game = new GameEngine(fixed(0));
+  game.grid[CONFIG.ROWS - 1] = [1, 2, 3, 4, 5, 6];
   game.queue = [1, 9, 8, 7, 6];
   game.currentTarget = 1;
   game.special[CONFIG.ROWS - 1][0] = 'freeze';
