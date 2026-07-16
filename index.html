@@ -3,30 +3,55 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#0f0e17">
+  <meta name="theme-color" content="#090b17">
   <title>NumDrop</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <main class="app">
-    <header>
-      <h1>Num<span>Drop</span></h1><button id="sound-toggle" class="sound-toggle" data-action="sound" onclick="window.toggleNumDropSound?.()" aria-pressed="true"></button>
-      <div class="stats">
-        <div><small>🏅 Rozet</small><b id="badges">0</b></div><div><small>Level</small><b id="level">1</b></div>
-        <div><small>Skor</small><b id="score">0</b></div><div><small>En yüksek</small><b id="best">0</b></div>
-      </div>
+    <header class="hud-header">
+      <h1 class="sr-only">NumDrop</h1>
+      <section class="stats" aria-label="Oyun istatistikleri">
+        <div class="stat-card"><small>🏅 ROZET</small><b id="badges">0</b></div>
+        <div class="stat-card"><small>LEVEL</small><b id="level">1</b></div>
+        <div class="stat-card"><small>SKOR</small><b id="score">0</b></div>
+        <div class="stat-card"><small>EN YÜKSEK</small><b id="best">0</b></div>
+      </section>
+      <button id="sound-toggle" class="sound-toggle" data-action="sound" onclick="window.toggleNumDropSound?.()" aria-pressed="true"></button>
     </header>
-    <section class="queue" aria-label="Sıra">
-      <span class="queue-label">Sıra</span><strong id="target">0</strong><span id="next">–</span><span id="next2">–</span>
-      <em>× <i id="remaining">0</i> kaldı</em><span id="forbidden-wrap" hidden>🚫 Basma: <b id="forbidden"></b></span>
-    </section>
+
     <p id="combo" class="combo" aria-live="polite"></p>
     <section id="grid" class="grid" role="grid" aria-label="Oyun alanı"></section>
-    <section class="time"><span id="time-label">⏱ Süre</span><div class="time-track"><div id="time-fill"></div></div></section>
+
+    <section class="queue" aria-label="Hedef sırası">
+      <span class="queue-label">SIRA</span>
+      <strong id="target" aria-label="Aktif hedef">0</strong>
+      <span id="next" aria-label="Sıradaki hedef">–</span>
+      <span id="next2" aria-label="Sonraki hedef">–</span>
+      <em>× <i id="remaining">0</i> kaldı</em>
+      <span id="forbidden-wrap" hidden>🚫 Basma: <b id="forbidden"></b></span>
+    </section>
+
+    <section class="time" aria-label="Kalan süre">
+      <span id="time-label">⏱ SÜRE</span>
+      <div class="time-track"><div id="time-fill"></div></div>
+    </section>
     <p id="toast" class="toast" aria-live="polite"></p>
   </main>
-  <section id="start" class="overlay"><div class="modal"><h2>NumDrop</h2><p>Alt sıradaki hedef rakamın tüm örneklerine dokun. Yanlış dokunuş oyunu bitirir.</p><p>Her 5 hedefte level atla; dondurucular süreyi durdurur.</p><button id="start-btn" data-action="start" onclick="window.startNumDrop?.()">🎮 Başla</button></div></section>
-  <section id="gameover" class="overlay" hidden><div class="modal"><h2>💥 Bitti</h2><p>Skorun</p><output id="final-score">0</output><button id="continue" data-action="continue" onclick="window.continueNumDrop?.()">▶️ Devam Et</button><button id="restart" class="secondary" data-action="restart" onclick="window.restartNumDrop?.()">🔄 Tekrar Oyna</button></div></section>
+
+  <section id="start" class="overlay"><div class="modal welcome-modal">
+    <p class="eyebrow">NUMDROP</p>
+    <h2>Hızlı düşün.<br><span>Doğru sayıyı yakala.</span></h2>
+    <p>Alt sıradaki hedef sayının tüm örneklerine dokun. Yanlış dokunuş oyunu bitirir.</p>
+    <div class="how-to"><span>01</span> Hedefi bul <span>02</span> Tümünü temizle <span>03</span> Level atla</div>
+    <button id="start-btn" data-action="start" onclick="window.startNumDrop?.()">OYUNA BAŞLA</button>
+  </div></section>
+
+  <section id="gameover" class="overlay" hidden><div class="modal">
+    <p class="eyebrow">TUR TAMAMLANDI</p><h2>Oyun bitti</h2><p>Skorun</p><output id="final-score">0</output>
+    <button id="continue" data-action="continue" onclick="window.continueNumDrop?.()">▶ Devam Et</button>
+    <button id="restart" class="secondary" data-action="restart" onclick="window.restartNumDrop?.()">↻ Tekrar Oyna</button>
+  </div></section>
   <script type="module" src="app.js"></script>
 </body>
 </html>
