@@ -4,8 +4,8 @@ const $ = (selector) => document.querySelector(selector);
 const gridEl = $('#grid');
 const engine = new GameEngine();
 let rafId = null;
+let gameOverTimer = null;
 let lastTick = performance.now();
-let paused = false;
 
 function loadPersistentState() {
   engine.bestScore = Math.max(0, Number.parseInt(localStorage.getItem('numdrop_best'), 10) || 0);
@@ -24,7 +24,8 @@ function renderGrid() {
       const value = engine.grid[row][col];
       cell.className = `cell${bottom ? ' bottom' : ''}`;
       cell.textContent = value;
-      cell.disabled = !bottom || !engine.gameActive || paused;
+      cell.disabled = !bottom || !engine.gameActive;
+      cell.setAttribute('aria-label', bottom ? `Sütun ${col + 1}, sayı ${value}` : `Sayı ${value}`);
       if (bottom && value === engine.forbiddenNum) cell.classList.add('forbidden');
       if (engine.special[row][col] === 'freeze') cell.classList.add('freeze');
       if (bottom) cell.addEventListener('click', () => handleClick(col, cell));
@@ -64,7 +65,8 @@ function handleClick(column, cell) {
   if (outcome.type === 'gameover') {
     cell.classList.add('wrong');
     renderHud();
-    setTimeout(showGameOver, 260);
+    clearTimeout(gameOverTimer);
+    gameOverTimer = setTimeout(showGameOver, 260);
     return;
   }
   if (outcome.type === 'freeze') showToast('❄️ +50');
@@ -79,63 +81,50 @@ function gameLoop(now) {
   lastTick = now;
   renderHud();
   if (result.type === 'gameover') { showGameOver(); return; }
-  if (engine.gameActive && !paused) rafId = requestAnimationFrame(gameLoop);
+  if (engine.gameActive) rafId = requestAnimationFrame(gameLoop);
 }
 function startLoop() {
   cancelAnimationFrame(rafId);
+  clearTimeout(gameOverTimer);
+  gameOverTimer = null;
   lastTick = performance.now();
   rafId = requestAnimationFrame(gameLoop);
 }
 function showGameOver() {
+  if (engine.gameActive) return;
   cancelAnimationFrame(rafId);
+  clearTimeout(gameOverTimer);
+  gameOverTimer = null;
   $('#final-score').textContent = engine.score;
   $('#continue').disabled = engine.badges === 0;
   $('#continue').textContent = engine.badges ? `▶️ Devam Et (🏅 ${engine.badges})` : '▶️ Devam Et (🏅 yok)';
   $('#gameover').hidden = false;
 }
 function startGame() {
+  clearTimeout(gameOverTimer);
   engine.start();
   loadPersistentState();
-  paused = false;
   $('#start').hidden = true;
-  $('#pause').hidden = true;
   $('#gameover').hidden = true;
   render();
   startLoop();
 }
 function continueGame() {
   if (!engine.continueGame()) return;
+  clearTimeout(gameOverTimer);
   savePersistentState();
   $('#gameover').hidden = true;
   render();
   startLoop();
 }
-function pauseForVisibility() {
-  if (document.hidden && engine.gameActive && !$('#start').hidden) {
-    paused = true;
-    cancelAnimationFrame(rafId);
-    $('#pause').hidden = false;
-    render();
-  }
-}
-function resumeGame() {
-  if (!paused) return;
-  paused = false;
-  $('#pause').hidden = true;
-  render();
-  startLoop();
-}
-
 window.startNumDrop = startGame;
 window.restartNumDrop = startGame;
 window.continueNumDrop = continueGame;
-window.resumeNumDrop = resumeGame;
 document.addEventListener('click', (event) => {
   if (event.target.closest('[onclick]')) return;
   const action = event.target.closest('[data-action]')?.dataset.action;
   if (action === 'start' || action === 'restart') startGame();
   if (action === 'continue') continueGame();
-  if (action === 'resume') resumeGame();
 });
 loadPersistentState();
 engine.gameActive = false;

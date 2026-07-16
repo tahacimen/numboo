@@ -21,13 +21,12 @@
       <em>× <i id="remaining">0</i> kaldı</em><span id="forbidden-wrap" hidden>🚫 Basma: <b id="forbidden"></b></span>
     </section>
     <p id="combo" class="combo" aria-live="polite"></p>
-    <section id="grid" class="grid" aria-label="Oyun alanı"></section>
+    <section id="grid" class="grid" role="grid" aria-label="Oyun alanı"></section>
     <section class="time"><span id="time-label">⏱ Süre</span><div class="time-track"><div id="time-fill"></div></div></section>
     <p id="toast" class="toast" aria-live="polite"></p>
   </main>
   <section id="start" class="overlay"><div class="modal"><h2>NumDrop</h2><p>Alt sıradaki hedef rakamın tüm örneklerine dokun. Yanlış dokunuş oyunu bitirir.</p><p>Her 5 hedefte level atla; dondurucular süreyi durdurur.</p><button id="start-btn" data-action="start" onclick="window.startNumDrop?.()">🎮 Başla</button></div></section>
   <section id="gameover" class="overlay" hidden><div class="modal"><h2>💥 Bitti</h2><p>Skorun</p><output id="final-score">0</output><button id="continue" data-action="continue" onclick="window.continueNumDrop?.()">▶️ Devam Et</button><button id="restart" class="secondary" data-action="restart" onclick="window.restartNumDrop?.()">🔄 Tekrar Oyna</button></div></section>
-  <section id="pause" class="overlay" hidden><div class="modal"><h2>Duraklatıldı</h2><p>Oyuna kaldığın yerden devam etmeye hazır mısın?</p><button id="resume" data-action="resume" onclick="window.resumeNumDrop?.()">▶️ Devam Et</button></div></section>
   <script type="module" src="app.js"></script>
 </body>
 </html>
