@@ -17,6 +17,18 @@ const fixed = (value) => () => value;
 
 {
   const game = new GameEngine(fixed(0));
+  game.start('fall');
+  game.grid = Array.from({ length: CONFIG.ROWS }, () => Array(CONFIG.COLS).fill(9));
+  game.grid[2][3] = 1;
+  game.currentTarget = 1;
+  game.recalc();
+  const result = game.click(3, 1000, 2);
+  assert.equal(result.type, 'correct', 'Akış modunda herhangi bir satır seçilebilmeli');
+  assert.equal(result.completedTarget, true);
+}
+
+{
+  const game = new GameEngine(fixed(0));
   game.grid[CONFIG.ROWS - 1] = [1, 2, 3, 4, 5, 6];
   game.currentTarget = 1;
   game.recalc();

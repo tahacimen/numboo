@@ -11,6 +11,7 @@ let soundEnabled = localStorage.getItem('numdrop_sound') !== 'false';
 let inventory = { shield: 0, scan: 0, time: 0 };
 let daily = { date: '', targets: 0, claimed: false };
 let achievements = [];
+let chosenMode = 'standard';
 
 const todayKey = () => new Date().toISOString().slice(0, 10);
 
@@ -80,14 +81,15 @@ function renderGrid() {
       const cell = document.createElement('button');
       const bottom = row === CONFIG.ROWS - 1;
       const value = engine.grid[row][col];
-      cell.className = `cell${bottom ? ' bottom' : ''}`;
+      const playable = engine.mode === 'fall' || bottom;
+      cell.className = `cell${bottom ? ' bottom' : ''}${engine.mode === 'fall' ? ' fall-cell' : ''}`;
       cell.textContent = value;
-      cell.disabled = !bottom || !engine.gameActive;
-      cell.setAttribute('aria-label', bottom ? `Sütun ${col + 1}, sayı ${value}` : `Sayı ${value}`);
+      cell.disabled = !playable || !engine.gameActive;
+      cell.setAttribute('aria-label', `Satır ${row + 1}, sütun ${col + 1}, sayı ${value}`);
       if (bottom && value === engine.forbiddenNum) cell.classList.add('forbidden');
-      if (bottom && value === engine.currentTarget && Date.now() < engine.scanUntil) cell.classList.add('scan-target');
+      if (playable && value === engine.currentTarget && Date.now() < engine.scanUntil) cell.classList.add('scan-target');
       if (engine.special[row][col] === 'freeze') cell.classList.add('freeze');
-      if (bottom) cell.addEventListener('click', () => handleClick(col, cell));
+      if (playable) cell.addEventListener('click', () => handleClick(col, cell, row));
       gridEl.append(cell);
     }
   }
@@ -101,6 +103,8 @@ function renderHud() {
   $('#best').textContent = engine.bestScore;
   $('#level').textContent = engine.level;
   $('#badges').textContent = engine.badges;
+  const modeLabel = $('#mode-label');
+  if (modeLabel) modeLabel.textContent = engine.mode === 'fall' ? 'AKIŞ MODU' : 'STANDART MOD';
   const pct = Math.max(0, engine.timeLeft / CONFIG.TIME_MAX * 100);
   $('#time-fill').style.width = `${pct}%`;
   $('#time-fill').classList.toggle('critical', pct <= 25 && !isFrozen());
@@ -118,8 +122,8 @@ function showToast(message) {
   toast.classList.remove('show');
   requestAnimationFrame(() => toast.classList.add('show'));
 }
-function handleClick(column, cell) {
-  const outcome = engine.click(column);
+function handleClick(column, cell, row) {
+  const outcome = engine.click(column, Date.now(), row);
   if (outcome.type === 'ignored') return;
   if (outcome.type === 'gameover') {
     playFeedback('wrong');
@@ -174,7 +178,7 @@ function showGameOver() {
 }
 function startGame() {
   clearTimeout(gameOverTimer);
-  engine.start();
+  engine.start(chosenMode);
   loadPersistentState();
   engine.shieldCharges = inventory.shield;
   inventory.shield = 0;
@@ -226,6 +230,11 @@ function usePower(type) {
   renderProgress();
   showToast(type === 'scan' ? 'HEDEFLER GÖSTERİLİYOR!' : '+15 SANİYE');
 }
+function selectMode(mode) {
+  chosenMode = mode === 'fall' ? 'fall' : 'standard';
+  document.querySelectorAll('[data-mode]').forEach((button) => button.classList.toggle('selected', button.dataset.mode === chosenMode));
+  $('#mode-description').textContent = chosenMode === 'fall' ? 'Sayılar yukarıdan akar; hedefi düşmeden yakala.' : 'Alt sıradaki hedef sayıların hepsini temizle.';
+}
 window.startNumDrop = startGame;
 window.restartNumDrop = startGame;
 window.continueNumDrop = continueGame;
@@ -233,6 +242,7 @@ window.toggleNumDropSound = toggleSound;
 window.goNumDropHome = goHome;
 window.buyNumDropPower = buyPower;
 window.useNumDropPower = usePower;
+window.selectNumDropMode = selectMode;
 document.addEventListener('click', (event) => {
   if (event.target.closest('[onclick]')) return;
   const action = event.target.closest('[data-action]')?.dataset.action;
@@ -242,9 +252,11 @@ document.addEventListener('click', (event) => {
   if (action === 'home') goHome();
   if (action === 'buy') buyPower(event.target.closest('[data-type]')?.dataset.type);
   if (action === 'power') usePower(event.target.closest('[data-power]')?.dataset.power);
+  if (action === 'mode') selectMode(event.target.closest('[data-mode]')?.dataset.mode);
 });
 loadPersistentState();
 syncSoundToggle();
 engine.gameActive = false;
 render();
 renderProgress();
+selectMode(chosenMode);

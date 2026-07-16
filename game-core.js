@@ -13,6 +13,7 @@ export const CONFIG = Object.freeze({
   MIN_SCORE_DELTA_MS: 80,
   SCAN_DURATION_MS: 5000,
   TIME_BOOST: 15,
+  FALL_INTERVAL_MS: 850,
 });
 
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
@@ -28,13 +29,14 @@ export class GameEngine {
   rnd() { return Math.floor(this.random() * 10); }
   pick(list) { return list[Math.floor(this.random() * list.length)]; }
 
-  start() {
+  start(mode = 'standard') {
     const { ROWS, COLS, TIME_MAX } = CONFIG;
     this.grid = Array.from({ length: ROWS }, () => Array.from({ length: COLS }, () => this.rnd()));
     this.special = Array.from({ length: ROWS }, () => Array(COLS).fill(null));
     this.queue = [];
     this.fillQueue(30);
     this.score = 0;
+    this.mode = mode === 'fall' ? 'fall' : 'standard';
     this.level = 1;
     this.targetsDone = 0;
     this.combo = 0;
@@ -42,6 +44,7 @@ export class GameEngine {
     this.frozenUntil = 0;
     this.scanUntil = 0;
     this.shieldCharges = 0;
+    this.fallCarry = 0;
     this.timeLeft = TIME_MAX;
     this.gameActive = true;
     this.forbiddenNum = null;
@@ -51,7 +54,8 @@ export class GameEngine {
   fillQueue(count) { for (let i = 0; i < count; i += 1) this.queue.push(this.rnd()); }
 
   recalc() {
-    this.remaining = this.grid[CONFIG.ROWS - 1].filter((value) => value === this.currentTarget).length;
+    const cells = this.mode === 'fall' ? this.grid.flat() : this.grid[CONFIG.ROWS - 1];
+    this.remaining = cells.filter((value) => value === this.currentTarget).length;
     return this.remaining;
   }
 
@@ -74,6 +78,21 @@ export class GameEngine {
     this.grid[0][column] = this.rnd();
     this.special[0][column] = null;
     this.recalc();
+  }
+
+  dropRows() {
+    for (let column = 0; column < CONFIG.COLS; column += 1) {
+      for (let row = CONFIG.ROWS - 1; row > 0; row -= 1) {
+        this.grid[row][column] = this.grid[row - 1][column];
+        this.special[row][column] = this.special[row - 1][column];
+      }
+      this.grid[0][column] = this.rnd();
+      this.special[0][column] = null;
+    }
+    if (this.recalc() === 0) {
+      this.grid[0][this.pick([...Array(CONFIG.COLS).keys()])] = this.currentTarget;
+      this.recalc();
+    }
   }
 
   levelUp() {
@@ -119,18 +138,19 @@ export class GameEngine {
     return { ended: true, reason };
   }
 
-  click(column, now = Date.now()) {
-    if (!this.gameActive || column < 0 || column >= CONFIG.COLS) return { type: 'ignored' };
-    const bottom = CONFIG.ROWS - 1;
-    const value = this.grid[bottom][column];
-    const isFreeze = this.special[bottom][column] === 'freeze';
+  click(column, now = Date.now(), row = CONFIG.ROWS - 1) {
+    if (!this.gameActive || column < 0 || column >= CONFIG.COLS || row < 0 || row >= CONFIG.ROWS) return { type: 'ignored' };
+    if (this.mode === 'standard' && row !== CONFIG.ROWS - 1) return { type: 'ignored' };
+    const value = this.grid[row][column];
+    const isFreeze = this.special[row][column] === 'freeze';
     const wasTarget = value === this.currentTarget;
 
     if (isFreeze) {
-      this.special[bottom][column] = null;
+      this.special[row][column] = null;
       this.frozenUntil = Math.max(this.frozenUntil, now) + CONFIG.FREEZE_DURATION_MS;
       this.score += 50;
-      this.shiftColumn(column);
+      if (this.mode === 'fall') this.grid[row][column] = this.rnd(); else this.shiftColumn(column);
+      this.recalc();
       const targetProgress = wasTarget && this.remaining === 0 ? this.finishTarget() : { completedTarget: false };
       return { type: 'freeze', points: 50, ...targetProgress };
     }
@@ -138,7 +158,8 @@ export class GameEngine {
     if (!wasTarget) {
       if (this.shieldCharges > 0) {
         this.shieldCharges -= 1;
-        this.shiftColumn(column);
+        if (this.mode === 'fall') this.grid[row][column] = this.rnd(); else this.shiftColumn(column);
+        this.recalc();
         return { type: 'shield', remaining: this.remaining };
       }
       return { type: 'gameover', ...this.end('wrong') };
@@ -147,7 +168,11 @@ export class GameEngine {
     const { points, multiplier } = this.pointsAt(now);
     this.score += points;
     this.timeLeft = clamp(this.timeLeft + Math.max(3, CONFIG.TIME_PER_HIT_BASE - (this.level - 1) * 0.5), 0, CONFIG.TIME_MAX);
-    this.shiftColumn(column);
+    if (this.mode === 'fall') {
+      this.grid[row][column] = this.rnd();
+      this.special[row][column] = null;
+      this.recalc();
+    } else this.shiftColumn(column);
     const targetProgress = this.remaining === 0 ? this.finishTarget() : { completedTarget: false };
     return { type: 'correct', points, multiplier, ...targetProgress };
   }
@@ -158,6 +183,13 @@ export class GameEngine {
     if (now >= this.frozenUntil) {
       const drain = CONFIG.START_DRAIN + (this.level - 1) * CONFIG.DRAIN_PER_LEVEL;
       this.timeLeft = Math.max(0, this.timeLeft - drain * (dtMs / 1000));
+      if (this.mode === 'fall') {
+        this.fallCarry += dtMs;
+        while (this.fallCarry >= CONFIG.FALL_INTERVAL_MS) {
+          this.fallCarry -= CONFIG.FALL_INTERVAL_MS;
+          this.dropRows();
+        }
+      }
     }
     return this.timeLeft === 0 ? { type: 'gameover', ...this.end('time') } : { type: 'tick' };
   }
