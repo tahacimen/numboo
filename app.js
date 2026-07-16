@@ -12,6 +12,9 @@ let inventory = { shield: 0, scan: 0, time: 0 };
 let daily = { date: '', targets: 0, claimed: false };
 let achievements = [];
 let chosenMode = 'standard';
+let fallItems = [];
+let fallLastSpawn = 0;
+let fallItemId = 0;
 
 const todayKey = () => new Date().toISOString().slice(0, 10);
 
@@ -75,6 +78,8 @@ function playFeedback(kind) {
   oscillator.stop(audioContext.currentTime + .11);
 }
 function renderGrid() {
+  if (engine.mode === 'fall') { renderFallBoard(); return; }
+  gridEl.classList.remove('fall-board');
   gridEl.innerHTML = '';
   for (let row = 0; row < CONFIG.ROWS; row += 1) {
     for (let col = 0; col < CONFIG.COLS; col += 1) {
@@ -93,6 +98,54 @@ function renderGrid() {
       gridEl.append(cell);
     }
   }
+}
+function renderFallBoard() {
+  gridEl.classList.add('fall-board');
+  gridEl.innerHTML = '<div id="fall-layer" class="fall-layer" aria-label="Düşen sayılar"></div><p class="fall-hint">HEDEFİ YAKALA · YERE DEĞDİRME</p>';
+  fallItems = [];
+  fallLastSpawn = performance.now();
+  spawnFallItem(true);
+}
+function spawnFallItem(forceTarget = false) {
+  const number = forceTarget || Math.random() < .38 ? engine.currentTarget : Math.floor(Math.random() * 10);
+  fallItems.push({ id: ++fallItemId, number, x: 5 + Math.random() * 76, y: -12, target: number === engine.currentTarget });
+}
+function updateFallMode(now) {
+  if (!engine.gameActive) return;
+  const dt = Math.min(60, now - lastTick);
+  if (now - fallLastSpawn > 980) { spawnFallItem(fallItems.filter((item) => item.target).length === 0); fallLastSpawn = now; }
+  fallItems.forEach((item) => { item.y += dt * .0105; });
+  const hitGround = fallItems.some((item) => item.target && item.y >= 88);
+  fallItems = fallItems.filter((item) => item.y < 102);
+  if (hitGround) { engine.end('missed-target'); showGameOver(); return; }
+  const layer = $('#fall-layer');
+  if (!layer) return;
+  layer.innerHTML = '';
+  fallItems.forEach((item) => {
+    const cell = document.createElement('button');
+    cell.className = `falling-number${item.target ? ' target-fall' : ''}`;
+    cell.textContent = item.number;
+    cell.style.left = `${item.x}%`;
+    cell.style.top = `${item.y}%`;
+    cell.setAttribute('aria-label', `Düşen sayı ${item.number}`);
+    cell.addEventListener('click', () => handleFallClick(item.id));
+    layer.append(cell);
+  });
+}
+function handleFallClick(id) {
+  const item = fallItems.find((entry) => entry.id === id);
+  if (!item || !engine.gameActive) return;
+  if (!item.target) { engine.end('wrong'); showGameOver(); return; }
+  const { points, multiplier } = engine.pointsAt(Date.now());
+  engine.score += points;
+  fallItems = fallItems.filter((entry) => entry.id !== id);
+  const outcome = engine.finishTarget();
+  if (engine.score > engine.bestScore) engine.bestScore = engine.score;
+  recordProgress(outcome);
+  showToast(`+${points}${multiplier > 1 ? ` ×${multiplier}` : ''}`);
+  renderHud();
+  renderProgress();
+  spawnFallItem(true);
 }
 function renderHud() {
   $('#target').textContent = engine.currentTarget;
@@ -153,6 +206,12 @@ function handleClick(column, cell, row) {
   if (outcome.leveledUp) showToast(`LEVEL ${engine.level}!`);
 }
 function gameLoop(now) {
+  if (engine.mode === 'fall') {
+    updateFallMode(now);
+    lastTick = now;
+    if (engine.gameActive) rafId = requestAnimationFrame(gameLoop);
+    return;
+  }
   const result = engine.tick(Math.min(100, now - lastTick), Date.now());
   lastTick = now;
   renderHud();
@@ -233,7 +292,7 @@ function usePower(type) {
 function selectMode(mode) {
   chosenMode = mode === 'fall' ? 'fall' : 'standard';
   document.querySelectorAll('[data-mode]').forEach((button) => button.classList.toggle('selected', button.dataset.mode === chosenMode));
-  $('#mode-description').textContent = chosenMode === 'fall' ? 'Sayılar yukarıdan akar; hedefi düşmeden yakala.' : 'Alt sıradaki hedef sayıların hepsini temizle.';
+  $('#mode-description').textContent = chosenMode === 'fall' ? 'Alan boş başlar. Hedef sayı yere değmeden ona dokun.' : 'Alt sıradaki hedef sayıların hepsini temizle.';
 }
 window.startNumDrop = startGame;
 window.restartNumDrop = startGame;

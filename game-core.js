@@ -54,7 +54,11 @@ export class GameEngine {
   fillQueue(count) { for (let i = 0; i < count; i += 1) this.queue.push(this.rnd()); }
 
   recalc() {
-    const cells = this.mode === 'fall' ? this.grid.flat() : this.grid[CONFIG.ROWS - 1];
+    if (this.mode === 'fall') {
+      this.remaining = 1;
+      return this.remaining;
+    }
+    const cells = this.grid[CONFIG.ROWS - 1];
     this.remaining = cells.filter((value) => value === this.currentTarget).length;
     return this.remaining;
   }
@@ -62,6 +66,11 @@ export class GameEngine {
   advanceTarget() {
     if (this.queue.length < 5) this.fillQueue(20);
     this.currentTarget = this.queue[0];
+    if (this.mode === 'fall') {
+      this.ensureFallTarget();
+      this.forbiddenNum = this.level >= 2 ? this.pick([...Array(10).keys()].filter((n) => n !== this.currentTarget)) : null;
+      return;
+    }
     if (this.recalc() === 0) {
       this.currentTarget = this.pick([...this.grid[CONFIG.ROWS - 1]]);
       this.queue[0] = this.currentTarget;
@@ -89,10 +98,12 @@ export class GameEngine {
       this.grid[0][column] = this.rnd();
       this.special[0][column] = null;
     }
-    if (this.recalc() === 0) {
-      this.grid[0][this.pick([...Array(CONFIG.COLS).keys()])] = this.currentTarget;
-      this.recalc();
-    }
+    this.ensureFallTarget();
+  }
+
+  ensureFallTarget() {
+    if (this.grid.flat().includes(this.currentTarget)) return;
+    this.grid[0][this.pick([...Array(CONFIG.COLS).keys()])] = this.currentTarget;
   }
 
   levelUp() {
@@ -151,7 +162,7 @@ export class GameEngine {
       this.score += 50;
       if (this.mode === 'fall') this.grid[row][column] = this.rnd(); else this.shiftColumn(column);
       this.recalc();
-      const targetProgress = wasTarget && this.remaining === 0 ? this.finishTarget() : { completedTarget: false };
+      const targetProgress = wasTarget && (this.mode === 'fall' || this.remaining === 0) ? this.finishTarget() : { completedTarget: false };
       return { type: 'freeze', points: 50, ...targetProgress };
     }
 
@@ -173,7 +184,7 @@ export class GameEngine {
       this.special[row][column] = null;
       this.recalc();
     } else this.shiftColumn(column);
-    const targetProgress = this.remaining === 0 ? this.finishTarget() : { completedTarget: false };
+    const targetProgress = this.mode === 'fall' || this.remaining === 0 ? this.finishTarget() : { completedTarget: false };
     return { type: 'correct', points, multiplier, ...targetProgress };
   }
 
