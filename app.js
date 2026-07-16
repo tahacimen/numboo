@@ -66,17 +66,25 @@ function syncSoundToggle() {
 }
 function playFeedback(kind) {
   if (navigator.vibrate) navigator.vibrate(kind === 'wrong' ? [35, 40, 60] : 18);
-  if (!soundEnabled || !window.AudioContext) return;
-  audioContext ??= new AudioContext();
-  const oscillator = audioContext.createOscillator();
-  const gain = audioContext.createGain();
-  oscillator.frequency.setValueAtTime(kind === 'wrong' ? 150 : kind === 'freeze' ? 740 : 520, audioContext.currentTime);
-  oscillator.type = kind === 'wrong' ? 'sawtooth' : 'sine';
-  gain.gain.setValueAtTime(.06, audioContext.currentTime);
-  gain.gain.exponentialRampToValueAtTime(.001, audioContext.currentTime + .11);
-  oscillator.connect(gain).connect(audioContext.destination);
-  oscillator.start();
-  oscillator.stop(audioContext.currentTime + .11);
+  if (!soundEnabled) return;
+  const AudioEngine = window.AudioContext || window.webkitAudioContext;
+  if (!AudioEngine) return;
+  audioContext ??= new AudioEngine();
+  if (audioContext.state === 'suspended') audioContext.resume().catch(() => {});
+  const notes = kind === 'wrong' ? [170, 116] : kind === 'freeze' ? [740, 990] : kind === 'start' ? [392, 523, 659] : [523, 659];
+  const now = audioContext.currentTime;
+  notes.forEach((frequency, index) => {
+    const oscillator = audioContext.createOscillator();
+    const gain = audioContext.createGain();
+    const offset = index * .055;
+    oscillator.type = kind === 'wrong' ? 'sawtooth' : 'sine';
+    oscillator.frequency.setValueAtTime(frequency, now + offset);
+    gain.gain.setValueAtTime(kind === 'wrong' ? .12 : .09, now + offset);
+    gain.gain.exponentialRampToValueAtTime(.001, now + offset + .13);
+    oscillator.connect(gain).connect(audioContext.destination);
+    oscillator.start(now + offset);
+    oscillator.stop(now + offset + .14);
+  });
 }
 function renderGrid() {
   if (engine.mode === 'fall') { renderFallBoard(); return; }
@@ -137,7 +145,7 @@ function updateFallMode(now) {
   const hitGround = fallItems.some((item) => item.number === engine.currentTarget && item.y >= 88);
   fallItems = fallItems.filter((item) => item.y < 102);
   engine.remaining = fallItems.filter((item) => item.number === engine.currentTarget).length;
-  if (hitGround) { engine.end('missed-target'); showGameOver(); return; }
+  if (hitGround) { engine.end('missed-target'); playFeedback('wrong'); showGameOver(); return; }
   const layer = $('#fall-layer');
   if (!layer) return;
   const activeIds = new Set();
@@ -161,12 +169,13 @@ function updateFallMode(now) {
 function handleFallClick(id) {
   const item = fallItems.find((entry) => entry.id === id);
   if (!item || !engine.gameActive) return;
-  if (item.number !== engine.currentTarget) { engine.end('wrong'); showGameOver(); return; }
+  if (item.number !== engine.currentTarget) { engine.end('wrong'); playFeedback('wrong'); showGameOver(); return; }
   const { points, multiplier } = engine.pointsAt(Date.now());
   engine.score += points;
   fallItems = fallItems.filter((entry) => entry.id !== id);
   engine.remaining = fallItems.filter((entry) => entry.number === engine.currentTarget).length;
   const outcome = engine.remaining === 0 ? engine.finishTarget() : { completedTarget: false };
+  playFeedback('correct');
   if (engine.score > engine.bestScore) engine.bestScore = engine.score;
   recordProgress(outcome);
   showToast(`+${points}${multiplier > 1 ? ` ×${multiplier}` : ''}`);
@@ -275,6 +284,7 @@ function startGame() {
   $('#gameover').hidden = true;
   render();
   renderProgress();
+  playFeedback('start');
   startLoop();
 }
 function continueGame() {
