@@ -128,8 +128,10 @@ function spawnFallWave() {
 function updateFallMode(now) {
   if (!engine.gameActive) return;
   const dt = Math.min(60, now - lastTick);
-  if (now - fallLastSpawn > 980) { spawnFallItem(false); fallLastSpawn = now; }
-  fallItems.forEach((item) => { item.y += dt * .0105; });
+  const speed = .0065 + Math.min(.012, engine.targetsDone * .00055);
+  const spawnDelay = Math.max(420, 1100 - engine.targetsDone * 45);
+  if (now - fallLastSpawn > spawnDelay) { spawnFallItem(false); fallLastSpawn = now; }
+  fallItems.forEach((item) => { item.y += dt * speed; });
   const hitGround = fallItems.some((item) => item.number === engine.currentTarget && item.y >= 88);
   fallItems = fallItems.filter((item) => item.y < 102);
   engine.remaining = fallItems.filter((item) => item.number === engine.currentTarget).length;
@@ -174,7 +176,8 @@ function renderHud() {
   $('#level').textContent = engine.level;
   $('#badges').textContent = engine.badges;
   const modeLabel = $('#mode-label');
-  if (modeLabel) modeLabel.textContent = engine.mode === 'fall' ? 'AKIŞ MODU' : 'STANDART MOD';
+  if (modeLabel) modeLabel.textContent = engine.mode === 'fall' ? `AKIŞ MODU · HIZ ×${(1 + engine.targetsDone * .08).toFixed(1)}` : 'STANDART MOD';
+  $('#timer-panel').hidden = engine.mode === 'fall';
   const pct = Math.max(0, engine.timeLeft / CONFIG.TIME_MAX * 100);
   $('#time-fill').style.width = `${pct}%`;
   $('#time-fill').classList.toggle('critical', pct <= 25 && !isFrozen());
