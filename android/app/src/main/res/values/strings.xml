@@ -2,6 +2,6 @@
 <resources>
     <string name="app_name">Numboo</string>
     <string name="title_activity_main">Numboo</string>
-    <string name="package_name">com.tahacimen.numdrop</string>
-    <string name="custom_url_scheme">com.tahacimen.numdrop</string>
+    <string name="package_name">com.tahacimen.numboo</string>
+    <string name="custom_url_scheme">com.tahacimen.numboo</string>
 </resources>

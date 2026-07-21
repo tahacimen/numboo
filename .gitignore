@@ -6,3 +6,15 @@ android/build/
 android/app/build/
 android/local.properties
 tools/
+
+# Signing material — leaking these means losing control of the published app.
+*.jks
+*.keystore
+keystore.properties
+android/app/release/
+android/app/google-services.json
+
+# Release artifacts
+*.aab
+*.apk
+.claude/worktrees/

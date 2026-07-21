@@ -18,6 +18,12 @@ Ardından `http://127.0.0.1:4173` adresini aç.
 - ❄️ dondurucu hücreler süreyi geçici olarak durdurur.
 - Sağ üstteki ses düğmesiyle sesli geri bildirimi açıp kapatabilirsin.
 
+## Dil desteği
+
+Oyun Türkçe ve İngilizce destekler. Açılışta cihaz dili (`navigator.languages`) algılanır; desteklenen bir dil yoksa İngilizceye düşer. Ana menünün sağ üstündeki dil düğmesiyle diller arasında geçiş yapılır ve seçim `localStorage`'a kaydedilir.
+
+Yeni dil eklemek için [`i18n.js`](i18n.js) içindeki `DICTIONARIES` nesnesine dil kodunu ve çevirileri ekle — başka dosyaya dokunmak gerekmez. Statik metinler HTML'de `data-i18n` (metin), `data-i18n-html` (iç HTML) ve `data-i18n-aria` (`aria-label`) öznitelikleriyle işaretlidir.
+
 ## Test
 
 ```bash

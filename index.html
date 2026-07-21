@@ -30,47 +30,48 @@
 <body>
   <section id="home-screen" class="home-screen" aria-labelledby="home-title">
     <span class="float-number n-one" aria-hidden="true">1</span><span class="float-number n-three" aria-hidden="true">3</span><span class="float-number n-eight" aria-hidden="true">8</span><span class="float-number n-two" aria-hidden="true">2</span><span class="float-number n-six" aria-hidden="true">6</span><span class="float-number n-four" aria-hidden="true">4</span>
+    <button id="lang-toggle" class="lang-toggle" data-action="lang" data-i18n-aria="home.langAria" onclick="window.cycleNumbooLang?.()">TR</button>
     <div class="home-panel">
       <p class="brand-mark" aria-label="Numboo">num<span>boo</span></p>
-      <h1 id="home-title">Sayıları yakala,<br><span>rekoru kap!</span></h1>
-      <p class="home-copy">Hedef sıradaki sayıları hızla bul, hepsini temizle ve yeni seviyeye çık.</p>
-      <section class="mode-picker" aria-label="Oyun modu seçimi"><b>OYUN MODU</b><div><button class="selected" data-action="mode" data-mode="standard" onclick="window.selectNumDropMode?.('standard')">▣ Standart<small>Hedef satırı</small></button><button data-action="mode" data-mode="fall" onclick="window.selectNumDropMode?.('fall')">↓ Akış<small>Düşen sayılar</small></button></div><p id="mode-description">Alt sıradaki hedef sayıların hepsini temizle.</p></section>
-      <button id="start-btn" class="start-button" data-action="start" onclick="window.startNumDrop?.()"><span>▶</span> OYNA</button>
-      <p class="home-note">Her doğru seçim seni bir sonraki seviyeye taşır.</p>
-      <section class="daily-card" aria-label="Günlük meydan okuma"><b>🏆 GÜNLÜK GÖREV</b><span id="daily-progress">0/3 hedef</span><small>3 hedefi tamamla, +1 rozet kazan</small></section>
-      <section class="progress-row" aria-label="İlerleme"><span>🏅 <b id="home-badges">0</b> rozet</span><span>⭐ <b id="achievement-count">0/3 açıldı</b></span></section>
-      <section class="shop" aria-label="Rozet marketi"><b>GÜÇLENDİRİCİLER · 1 🏅</b><div class="shop-items"><button data-action="buy" data-type="shield" onclick="window.buyNumDropPower?.('shield')">🛡<small>Kalkan</small></button><button data-action="buy" data-type="scan" onclick="window.buyNumDropPower?.('scan')">🔍<small>Tarayıcı</small></button><button data-action="buy" data-type="time" onclick="window.buyNumDropPower?.('time')">⏱<small>+15 sn</small></button></div></section>
+      <h1 id="home-title" data-i18n-html="home.tagline">Sayıları yakala,<br><span>rekoru kap!</span></h1>
+      <p class="home-copy" data-i18n="home.copy">Hedef sıradaki sayıları hızla bul, hepsini temizle ve yeni seviyeye çık.</p>
+      <section class="mode-picker" data-i18n-aria="home.modeAria" aria-label="Oyun modu seçimi"><b data-i18n="home.modeTitle">OYUN MODU</b><div><button class="selected" data-action="mode" data-mode="standard" data-i18n-html="mode.standard" onclick="window.selectNumDropMode?.('standard')">▣ Standart<small>Hedef satırı</small></button><button data-action="mode" data-mode="fall" data-i18n-html="mode.fall" onclick="window.selectNumDropMode?.('fall')">↓ Akış<small>Düşen sayılar</small></button></div><p id="mode-description">Alt sıradaki hedef sayıların hepsini temizle.</p></section>
+      <button id="start-btn" class="start-button" data-action="start" onclick="window.startNumDrop?.()"><span>▶</span><b data-i18n="home.play">OYNA</b></button>
+      <p class="home-note" data-i18n="home.note">Her doğru seçim seni bir sonraki seviyeye taşır.</p>
+      <section class="daily-card" data-i18n-aria="home.dailyAria" aria-label="Günlük meydan okuma"><b data-i18n="home.dailyTitle">🏆 GÜNLÜK GÖREV</b><span id="daily-progress">0/3 hedef</span><small data-i18n="home.dailyHint">3 hedefi tamamla, +1 rozet kazan</small></section>
+      <section class="progress-row" data-i18n-aria="home.progressAria" aria-label="İlerleme"><span>🏅 <b id="home-badges">0</b> <span data-i18n="home.badgesLabel">rozet</span></span><span>⭐ <b id="achievement-count">0/3 açıldı</b></span></section>
+      <section class="shop" data-i18n-aria="home.shopAria" aria-label="Rozet marketi"><b data-i18n="home.shopTitle">GÜÇLENDİRİCİLER · 1 🏅</b><div class="shop-items"><button data-action="buy" data-type="shield" data-i18n-html="power.shield" onclick="window.buyNumDropPower?.('shield')">🛡<small>Kalkan</small></button><button data-action="buy" data-type="scan" data-i18n-html="power.scan" onclick="window.buyNumDropPower?.('scan')">🔍<small>Tarayıcı</small></button><button data-action="buy" data-type="time" data-i18n-html="power.time" onclick="window.buyNumDropPower?.('time')">⏱<small>+15 sn</small></button></div></section>
     </div>
   </section>
 
   <main id="game-screen" class="app" hidden>
     <header class="hud-header">
-      <h1 class="sr-only">Numboo oyun ekranı</h1>
-      <section class="stats" aria-label="Oyun istatistikleri">
-        <div class="stat-card"><small>🏅 ROZET</small><b id="badges">0</b></div>
-        <div class="stat-card"><small>LEVEL</small><b id="level">1</b></div>
-        <div class="stat-card"><small>SKOR</small><b id="score">0</b></div>
-        <div class="stat-card"><small>EN YÜKSEK</small><b id="best">0</b></div>
+      <h1 class="sr-only" data-i18n="game.screenTitle">Numboo oyun ekranı</h1>
+      <section class="stats" data-i18n-aria="game.statsAria" aria-label="Oyun istatistikleri">
+        <div class="stat-card"><small data-i18n="stat.badges">🏅 ROZET</small><b id="badges">0</b></div>
+        <div class="stat-card"><small data-i18n="stat.level">LEVEL</small><b id="level">1</b></div>
+        <div class="stat-card"><small data-i18n="stat.score">SKOR</small><b id="score">0</b></div>
+        <div class="stat-card"><small data-i18n="stat.best">EN YÜKSEK</small><b id="best">0</b></div>
       </section>
       <button id="sound-toggle" class="sound-toggle" data-action="sound" onclick="window.toggleNumDropSound?.()" aria-pressed="true"></button>
     </header>
     <p id="mode-label" class="mode-label">STANDART MOD</p>
     <p id="combo" class="combo" aria-live="polite"></p>
-    <section id="grid" class="grid" role="grid" aria-label="Oyun alanı"></section>
-    <section class="queue" aria-label="Hedef sırası">
-      <span class="queue-label">SIRA</span><strong id="target" aria-label="Aktif hedef">0</strong><span id="next" aria-label="Sıradaki hedef">–</span><span id="next2" aria-label="Sonraki hedef">–</span>
-      <em>× <i id="remaining">0</i> kaldı</em><span id="forbidden-wrap" hidden>🚫 Basma: <b id="forbidden"></b></span>
+    <section id="grid" class="grid" role="grid" data-i18n-aria="game.gridAria" aria-label="Oyun alanı"></section>
+    <section class="queue" data-i18n-aria="game.queueAria" aria-label="Hedef sırası">
+      <span class="queue-label" data-i18n="game.queueLabel">SIRA</span><strong id="target" data-i18n-aria="game.targetAria" aria-label="Aktif hedef">0</strong><span id="next" data-i18n-aria="game.nextAria" aria-label="Sıradaki hedef">–</span><span id="next2" data-i18n-aria="game.next2Aria" aria-label="Sonraki hedef">–</span>
+      <em>× <i id="remaining">0</i> <span data-i18n="game.remaining">kaldı</span></em><span id="forbidden-wrap" hidden><span data-i18n="game.forbidden">🚫 Basma:</span> <b id="forbidden"></b></span>
     </section>
-    <section id="timer-panel" class="time" aria-label="Kalan süre"><span id="time-label">⏱ SÜRE</span><div class="time-track"><div id="time-fill"></div></div></section>
-    <section class="power-bar" aria-label="Güçlendiriciler"><button data-action="power" data-power="shield" disabled>🛡 <b id="power-shield-count">0</b></button><button data-action="power" data-power="scan" onclick="window.useNumDropPower?.('scan')">🔍 <b id="power-scan-count">0</b></button><button data-action="power" data-power="time" onclick="window.useNumDropPower?.('time')">⏱ <b id="power-time-count">0</b></button></section>
+    <section id="timer-panel" class="time" data-i18n-aria="game.timerAria" aria-label="Kalan süre"><span id="time-label">⏱ SÜRE</span><div class="time-track"><div id="time-fill"></div></div></section>
+    <section class="power-bar" data-i18n-aria="game.powerAria" aria-label="Güçlendiriciler"><button data-action="power" data-power="shield" disabled>🛡 <b id="power-shield-count">0</b></button><button data-action="power" data-power="scan" onclick="window.useNumDropPower?.('scan')">🔍 <b id="power-scan-count">0</b></button><button data-action="power" data-power="time" onclick="window.useNumDropPower?.('time')">⏱ <b id="power-time-count">0</b></button></section>
     <p id="toast" class="toast" aria-live="polite"></p>
   </main>
 
   <section id="gameover" class="overlay" hidden><div class="modal">
-    <p class="eyebrow">TUR TAMAMLANDI</p><h2>TEKRAR<br><span>DENE!</span></h2><p>PUANIN</p><output id="final-score">0</output>
-    <button id="continue" data-action="continue" onclick="window.continueNumDrop?.()">▶ Devam Et</button>
-    <button id="restart" class="secondary" data-action="restart" onclick="window.restartNumDrop?.()">↻ Tekrar Oyna</button>
-    <button class="tertiary" data-action="home" onclick="window.goNumDropHome?.()">⌂ Ana Menü</button>
+    <p class="eyebrow" data-i18n="over.eyebrow">TUR TAMAMLANDI</p><h2 data-i18n-html="over.title">TEKRAR<br><span>DENE!</span></h2><p data-i18n="over.scoreLabel">PUANIN</p><output id="final-score">0</output>
+    <button id="continue" data-action="continue" onclick="window.continueNumDrop?.()">▶️ Devam Et</button>
+    <button id="restart" class="secondary" data-action="restart" data-i18n="over.restart" onclick="window.restartNumDrop?.()">↻ Tekrar Oyna</button>
+    <button class="tertiary" data-action="home" data-i18n="over.home" onclick="window.goNumDropHome?.()">⌂ Ana Menü</button>
   </div></section>
   <script type="module" src="app.js"></script>
 </body>

@@ -1,4 +1,4 @@
-package com.tahacimen.numdrop;
+package com.tahacimen.numboo;
 
 import com.getcapacitor.BridgeActivity;
 

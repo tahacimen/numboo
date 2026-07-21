@@ -1,4 +1,5 @@
 import { CONFIG, GameEngine } from './game-core.js';
+import { getLang, initLang, nextLang, setLang, t } from './i18n.js';
 
 const $ = (selector) => document.querySelector(selector);
 const gridEl = $('#grid');
@@ -38,9 +39,9 @@ function renderProgress() {
   const homeBadges = $('#home-badges');
   if (homeBadges) homeBadges.textContent = engine.badges;
   const dailyText = $('#daily-progress');
-  if (dailyText) dailyText.textContent = daily.claimed ? 'Tamamlandı ✓' : `${daily.targets}/3 hedef`;
+  if (dailyText) dailyText.textContent = daily.claimed ? t('progress.dailyDone') : t('progress.daily', { done: daily.targets });
   const achievementText = $('#achievement-count');
-  if (achievementText) achievementText.textContent = `${achievements.length}/3 açıldı`;
+  if (achievementText) achievementText.textContent = t('progress.achievements', { done: achievements.length });
   ['shield', 'scan', 'time'].forEach((type) => {
     const count = $(`#power-${type}-count`);
     if (count) count.textContent = type === 'shield' ? engine.shieldCharges : inventory[type];
@@ -51,7 +52,7 @@ function renderProgress() {
 function recordProgress(outcome) {
   if (outcome.completedTarget && !daily.claimed) {
     daily.targets += 1;
-    if (daily.targets >= 3) { daily.claimed = true; engine.badges += 1; showToast('GÜNLÜK GÖREV +1 ROZET'); }
+    if (daily.targets >= 3) { daily.claimed = true; engine.badges += 1; showToast(t('toast.dailyDone')); }
   }
   if (engine.score >= 1000 && !achievements.includes('score')) achievements.push('score');
   if (engine.level >= 2 && !achievements.includes('level')) achievements.push('level');
@@ -61,7 +62,7 @@ function recordProgress(outcome) {
 function syncSoundToggle() {
   const control = $('#sound-toggle');
   control.textContent = soundEnabled ? '🔊' : '🔇';
-  control.setAttribute('aria-label', soundEnabled ? 'Sesi kapat' : 'Sesi aç');
+  control.setAttribute('aria-label', t(soundEnabled ? 'sound.mute' : 'sound.unmute'));
   control.setAttribute('aria-pressed', String(soundEnabled));
 }
 function playFeedback(kind) {
@@ -99,7 +100,7 @@ function renderGrid() {
       cell.className = `cell${bottom ? ' bottom' : ''}${engine.mode === 'fall' ? ' fall-cell' : ''}`;
       cell.textContent = value;
       cell.disabled = !playable || !engine.gameActive;
-      cell.setAttribute('aria-label', `Satır ${row + 1}, sütun ${col + 1}, sayı ${value}`);
+      cell.setAttribute('aria-label', t('game.cellAria', { row: row + 1, col: col + 1, value }));
       if (bottom && value === engine.forbiddenNum) cell.classList.add('forbidden');
       if (playable && value === engine.currentTarget && Date.now() < engine.scanUntil) cell.classList.add('scan-target');
       if (engine.special[row][col] === 'freeze') cell.classList.add('freeze');
@@ -110,7 +111,7 @@ function renderGrid() {
 }
 function renderFallBoard() {
   gridEl.classList.add('fall-board');
-  gridEl.innerHTML = '<div id="fall-layer" class="fall-layer" aria-label="Düşen sayılar"></div><p class="fall-hint">HEDEFİ YAKALA · YERE DEĞDİRME</p>';
+  gridEl.innerHTML = `<div id="fall-layer" class="fall-layer" aria-label="${t('game.fallLayerAria')}"></div><p class="fall-hint">${t('game.fallHint')}</p>`;
   $('#fall-layer').addEventListener('pointerdown', (event) => {
     const id = Number(event.target.closest('[data-fall-id]')?.dataset.fallId);
     if (Number.isInteger(id)) handleFallClick(id);
@@ -162,7 +163,7 @@ function updateFallMode(now) {
     }
     cell.style.left = `${item.x}%`;
     cell.style.top = `${item.y}%`;
-    cell.setAttribute('aria-label', `Düşen sayı ${item.number}`);
+    cell.setAttribute('aria-label', t('game.fallItemAria', { value: item.number }));
   });
   fallNodes.forEach((cell, id) => { if (!activeIds.has(id)) { cell.remove(); fallNodes.delete(id); } });
 }
@@ -193,16 +194,16 @@ function renderHud() {
   $('#level').textContent = engine.level;
   $('#badges').textContent = engine.badges;
   const modeLabel = $('#mode-label');
-  if (modeLabel) modeLabel.textContent = engine.mode === 'fall' ? `AKIŞ MODU · HIZ ×${(1 + engine.targetsDone * .08).toFixed(1)}` : 'STANDART MOD';
+  if (modeLabel) modeLabel.textContent = engine.mode === 'fall' ? t('game.modeFall', { speed: (1 + engine.targetsDone * .08).toFixed(1) }) : t('game.modeStandard');
   $('#timer-panel').hidden = engine.mode === 'fall';
   const pct = Math.max(0, engine.timeLeft / CONFIG.TIME_MAX * 100);
   $('#time-fill').style.width = `${pct}%`;
   $('#time-fill').classList.toggle('critical', pct <= 25 && !isFrozen());
-  $('#time-label').textContent = isFrozen() ? '❄️ Dondu' : '⏱ Süre';
+  $('#time-label').textContent = t(isFrozen() ? 'game.frozen' : 'game.time');
   $('#forbidden-wrap').hidden = engine.forbiddenNum === null;
   $('#forbidden').textContent = engine.forbiddenNum ?? '';
   const combo = $('#combo');
-  combo.textContent = engine.combo >= 2 ? `${engine.combo >= 12 ? '🔥🔥' : engine.combo >= 6 ? '🔥' : ''} COMBO ${engine.combo} ×${Math.min(CONFIG.COMBO_CAP, 1 + Math.floor(engine.combo / 4))}` : '';
+  combo.textContent = engine.combo >= 2 ? `${engine.combo >= 12 ? '🔥🔥' : engine.combo >= 6 ? '🔥' : ''} ${t('game.combo', { count: engine.combo, multiplier: Math.min(CONFIG.COMBO_CAP, 1 + Math.floor(engine.combo / 4)) })}` : '';
 }
 function isFrozen() { return Date.now() < engine.frozenUntil; }
 function render() { renderGrid(); renderHud(); }
@@ -225,7 +226,7 @@ function handleClick(column, cell, row) {
   }
   if (outcome.type === 'shield') {
     playFeedback('freeze');
-    showToast('KALKAN SENİ KORUDU!');
+    showToast(t('toast.shield'));
     savePersistentState();
     render();
     return;
@@ -240,7 +241,7 @@ function handleClick(column, cell, row) {
   if (engine.score > engine.bestScore) engine.bestScore = engine.score;
   recordProgress(outcome);
   render();
-  if (outcome.leveledUp) showToast(`LEVEL ${engine.level}!`);
+  if (outcome.leveledUp) showToast(t('toast.levelUp', { level: engine.level }));
 }
 function gameLoop(now) {
   if (engine.mode === 'fall') {
@@ -268,9 +269,13 @@ function showGameOver() {
   clearTimeout(gameOverTimer);
   gameOverTimer = null;
   $('#final-score').textContent = engine.score;
-  $('#continue').disabled = engine.badges === 0;
-  $('#continue').textContent = engine.badges ? `▶️ Devam Et (🏅 ${engine.badges})` : '▶️ Devam Et (🏅 yok)';
+  syncContinueButton();
   $('#gameover').hidden = false;
+}
+function syncContinueButton() {
+  const button = $('#continue');
+  button.disabled = engine.badges === 0;
+  button.textContent = engine.badges ? t('over.continue', { count: engine.badges }) : t('over.continueNone');
 }
 function startGame() {
   clearTimeout(gameOverTimer);
@@ -311,12 +316,12 @@ function toggleSound() {
   if (soundEnabled) playFeedback('correct');
 }
 function buyPower(type) {
-  if (!['shield', 'scan', 'time'].includes(type) || engine.badges < 1) { showToast('1 rozet gerekli'); return; }
+  if (!['shield', 'scan', 'time'].includes(type) || engine.badges < 1) { showToast(t('toast.needBadge')); return; }
   engine.badges -= 1;
   inventory[type] += 1;
   savePersistentState();
   renderProgress();
-  showToast('Güçlendirici hazır!');
+  showToast(t('toast.powerReady'));
 }
 function usePower(type) {
   if (type === 'shield' || !engine.gameActive || !inventory[type]) return;
@@ -325,12 +330,25 @@ function usePower(type) {
   savePersistentState();
   render();
   renderProgress();
-  showToast(type === 'scan' ? 'HEDEFLER GÖSTERİLİYOR!' : '+15 SANİYE');
+  showToast(t(type === 'scan' ? 'toast.scan' : 'toast.timeBoost'));
 }
 function selectMode(mode) {
   chosenMode = mode === 'fall' ? 'fall' : 'standard';
   document.querySelectorAll('[data-mode]').forEach((button) => button.classList.toggle('selected', button.dataset.mode === chosenMode));
-  $('#mode-description').textContent = chosenMode === 'fall' ? 'Alan boş başlar. Hedef sayı yere değmeden ona dokun.' : 'Alt sıradaki hedef sayıların hepsini temizle.';
+  $('#mode-description').textContent = t(chosenMode === 'fall' ? 'mode.fallDesc' : 'mode.standardDesc');
+}
+function syncLangToggle() {
+  const control = $('#lang-toggle');
+  if (control) control.textContent = getLang().toUpperCase();
+}
+function cycleLang() {
+  setLang(nextLang());
+  syncLangToggle();
+  syncSoundToggle();
+  selectMode(chosenMode);
+  syncContinueButton();
+  renderProgress();
+  if (engine.gameActive) renderHud();
 }
 window.startNumDrop = startGame;
 window.restartNumDrop = startGame;
@@ -340,6 +358,7 @@ window.goNumDropHome = goHome;
 window.buyNumDropPower = buyPower;
 window.useNumDropPower = usePower;
 window.selectNumDropMode = selectMode;
+window.cycleNumbooLang = cycleLang;
 document.addEventListener('click', (event) => {
   if (event.target.closest('[onclick]')) return;
   const action = event.target.closest('[data-action]')?.dataset.action;
@@ -350,8 +369,11 @@ document.addEventListener('click', (event) => {
   if (action === 'buy') buyPower(event.target.closest('[data-type]')?.dataset.type);
   if (action === 'power') usePower(event.target.closest('[data-power]')?.dataset.power);
   if (action === 'mode') selectMode(event.target.closest('[data-mode]')?.dataset.mode);
+  if (action === 'lang') cycleLang();
 });
 loadPersistentState();
+initLang();
+syncLangToggle();
 syncSoundToggle();
 engine.gameActive = false;
 render();
