@@ -1,0 +1,33 @@
+workflows:
+  ios-testflight:
+    name: Numboo iOS TestFlight
+    max_build_duration: 60
+    environment:
+      vars:
+        XCODE_WORKSPACE: ios/App/App.xcworkspace
+        XCODE_SCHEME: App
+      node: 22
+      xcode: latest
+      cocoapods: default
+    scripts:
+      - name: Install JavaScript dependencies
+        script: |
+          corepack enable
+          pnpm install --frozen-lockfile
+      - name: Build web app and sync the iOS project
+        script: pnpm run ios:sync
+      - name: Apply managed code-signing profiles
+        script: xcode-project use-profiles
+      - name: Build signed IPA
+        script: |
+          xcode-project build-ipa \
+            --workspace "$XCODE_WORKSPACE" \
+            --scheme "$XCODE_SCHEME"
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+      - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.app
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true
