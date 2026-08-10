@@ -27,6 +27,8 @@ workflows:
       - build/ios/ipa/*.ipa
       - /tmp/xcodebuild_logs/*.log
       - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.app
+    integrations:
+      app_store_connect: numboo-app-store-connect
     publishing:
       app_store_connect:
         auth: integration
