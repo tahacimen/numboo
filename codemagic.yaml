@@ -12,7 +12,9 @@ workflows:
     scripts:
       - name: Install JavaScript dependencies
         script: |
-          corepack enable
+          # Avoid Corepack here: the Codemagic image has a parent Yarn setup
+          # that can make Corepack select Yarn before it reaches this project.
+          npm install --global pnpm@11.16.0
           pnpm install --frozen-lockfile
       - name: Build web app and sync the iOS project
         script: pnpm run ios:sync
