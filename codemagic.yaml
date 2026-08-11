@@ -24,7 +24,7 @@ workflows:
       - name: Build web app and sync the iOS project
         script: |
           "$HOME/.numboo-pnpm/node_modules/.bin/pnpm" run build
-          "$HOME/.numboo-pnpm/node_modules/.bin/pnpm" exec cap sync ios
+          node node_modules/@capacitor/cli/bin/capacitor sync ios
       - name: Set a unique iOS build number
         script: |
           cd "$CM_BUILD_DIR/ios/App"
