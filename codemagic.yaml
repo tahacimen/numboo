@@ -12,12 +12,10 @@ workflows:
     scripts:
       - name: Install JavaScript dependencies
         script: |
-          # Avoid Corepack here: the Codemagic image has a parent Yarn setup
-          # that can make Corepack select Yarn before it reaches this project.
-          npm install --global pnpm@11.16.0
-          pnpm install --frozen-lockfile
+          # Run pnpm through npx to avoid the runner's preinstalled Corepack shim.
+          npx --yes pnpm@11.16.0 install --frozen-lockfile
       - name: Build web app and sync the iOS project
-        script: pnpm run ios:sync
+        script: npx --yes pnpm@11.16.0 run ios:sync
       - name: Apply managed code-signing profiles
         script: xcode-project use-profiles
       - name: Build signed IPA
