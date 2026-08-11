@@ -1,0 +1,381 @@
+import { CONFIG, GameEngine } from './game-core.js';
+import { getLang, initLang, nextLang, setLang, t } from './i18n.js';
+
+const $ = (selector) => document.querySelector(selector);
+const gridEl = $('#grid');
+const engine = new GameEngine();
+let rafId = null;
+let gameOverTimer = null;
+let lastTick = performance.now();
+let audioContext = null;
+let soundEnabled = localStorage.getItem('numdrop_sound') !== 'false';
+let inventory = { shield: 0, scan: 0, time: 0 };
+let daily = { date: '', targets: 0, claimed: false };
+let achievements = [];
+let chosenMode = 'standard';
+let fallItems = [];
+let fallLastSpawn = 0;
+let fallItemId = 0;
+let fallNodes = new Map();
+
+const todayKey = () => new Date().toISOString().slice(0, 10);
+
+function loadPersistentState() {
+  engine.bestScore = Math.max(0, Number.parseInt(localStorage.getItem('numdrop_best'), 10) || 0);
+  engine.badges = Math.max(0, Number.parseInt(localStorage.getItem('numdrop_badges'), 10) || 0);
+  inventory = { ...inventory, ...(JSON.parse(localStorage.getItem('numdrop_inventory') || '{}')) };
+  daily = { ...daily, ...(JSON.parse(localStorage.getItem('numdrop_daily') || '{}')) };
+  if (daily.date !== todayKey()) daily = { date: todayKey(), targets: 0, claimed: false };
+  achievements = JSON.parse(localStorage.getItem('numdrop_achievements') || '[]');
+}
+function savePersistentState() {
+  localStorage.setItem('numdrop_best', String(engine.bestScore));
+  localStorage.setItem('numdrop_badges', String(engine.badges));
+  localStorage.setItem('numdrop_inventory', JSON.stringify(inventory));
+  localStorage.setItem('numdrop_daily', JSON.stringify(daily));
+  localStorage.setItem('numdrop_achievements', JSON.stringify(achievements));
+}
+function renderProgress() {
+  const homeBadges = $('#home-badges');
+  if (homeBadges) homeBadges.textContent = engine.badges;
+  const dailyText = $('#daily-progress');
+  if (dailyText) dailyText.textContent = daily.claimed ? t('progress.dailyDone') : t('progress.daily', { done: daily.targets });
+  const achievementText = $('#achievement-count');
+  if (achievementText) achievementText.textContent = t('progress.achievements', { done: achievements.length });
+  ['shield', 'scan', 'time'].forEach((type) => {
+    const count = $(`#power-${type}-count`);
+    if (count) count.textContent = type === 'shield' ? engine.shieldCharges : inventory[type];
+    const button = $(`[data-power="${type}"]`);
+    if (button) button.disabled = type === 'shield' || inventory[type] === 0 || !engine.gameActive;
+  });
+}
+function recordProgress(outcome) {
+  if (outcome.completedTarget && !daily.claimed) {
+    daily.targets += 1;
+    if (daily.targets >= 3) { daily.claimed = true; engine.badges += 1; showToast(t('toast.dailyDone')); }
+  }
+  if (engine.score >= 1000 && !achievements.includes('score')) achievements.push('score');
+  if (engine.level >= 2 && !achievements.includes('level')) achievements.push('level');
+  if (engine.combo >= 6 && !achievements.includes('combo')) achievements.push('combo');
+  savePersistentState();
+}
+function syncSoundToggle() {
+  const control = $('#sound-toggle');
+  control.textContent = soundEnabled ? '🔊' : '🔇';
+  control.setAttribute('aria-label', t(soundEnabled ? 'sound.mute' : 'sound.unmute'));
+  control.setAttribute('aria-pressed', String(soundEnabled));
+}
+function playFeedback(kind) {
+  if (navigator.vibrate) navigator.vibrate(kind === 'wrong' ? [35, 40, 60] : 18);
+  if (!soundEnabled) return;
+  const AudioEngine = window.AudioContext || window.webkitAudioContext;
+  if (!AudioEngine) return;
+  audioContext ??= new AudioEngine();
+  if (audioContext.state === 'suspended') audioContext.resume().catch(() => {});
+  const notes = kind === 'wrong' ? [170, 116] : kind === 'freeze' ? [740, 990] : kind === 'start' ? [392, 523, 659] : [523, 659];
+  const now = audioContext.currentTime;
+  notes.forEach((frequency, index) => {
+    const oscillator = audioContext.createOscillator();
+    const gain = audioContext.createGain();
+    const offset = index * .055;
+    oscillator.type = kind === 'wrong' ? 'sawtooth' : 'sine';
+    oscillator.frequency.setValueAtTime(frequency, now + offset);
+    gain.gain.setValueAtTime(kind === 'wrong' ? .12 : .09, now + offset);
+    gain.gain.exponentialRampToValueAtTime(.001, now + offset + .13);
+    oscillator.connect(gain).connect(audioContext.destination);
+    oscillator.start(now + offset);
+    oscillator.stop(now + offset + .14);
+  });
+}
+function renderGrid() {
+  if (engine.mode === 'fall') { renderFallBoard(); return; }
+  gridEl.classList.remove('fall-board');
+  gridEl.innerHTML = '';
+  for (let row = 0; row < CONFIG.ROWS; row += 1) {
+    for (let col = 0; col < CONFIG.COLS; col += 1) {
+      const cell = document.createElement('button');
+      const bottom = row === CONFIG.ROWS - 1;
+      const value = engine.grid[row][col];
+      const playable = engine.mode === 'fall' || bottom;
+      cell.className = `cell${bottom ? ' bottom' : ''}${engine.mode === 'fall' ? ' fall-cell' : ''}`;
+      cell.textContent = value;
+      cell.disabled = !playable || !engine.gameActive;
+      cell.setAttribute('aria-label', t('game.cellAria', { row: row + 1, col: col + 1, value }));
+      if (bottom && value === engine.forbiddenNum) cell.classList.add('forbidden');
+      if (playable && value === engine.currentTarget && Date.now() < engine.scanUntil) cell.classList.add('scan-target');
+      if (engine.special[row][col] === 'freeze') cell.classList.add('freeze');
+      if (playable) cell.addEventListener('click', () => handleClick(col, cell, row));
+      gridEl.append(cell);
+    }
+  }
+}
+function renderFallBoard() {
+  gridEl.classList.add('fall-board');
+  gridEl.innerHTML = `<div id="fall-layer" class="fall-layer" aria-label="${t('game.fallLayerAria')}"></div><p class="fall-hint">${t('game.fallHint')}</p>`;
+  $('#fall-layer').addEventListener('pointerdown', (event) => {
+    const id = Number(event.target.closest('[data-fall-id]')?.dataset.fallId);
+    if (Number.isInteger(id)) handleFallClick(id);
+  });
+  fallItems = [];
+  fallNodes = new Map();
+  fallLastSpawn = performance.now();
+  spawnFallWave();
+}
+function spawnFallItem(target = false, offset = -12) {
+  const number = target ? engine.currentTarget : (() => { let value = Math.floor(Math.random() * 10); while (value === engine.currentTarget) value = Math.floor(Math.random() * 10); return value; })();
+  fallItems.push({ id: ++fallItemId, number, x: pickFallLane(offset), y: offset });
+}
+function pickFallLane(y) {
+  const lanes = [9, 25, 41, 57, 73, 89];
+  const safe = lanes.filter((lane) => !fallItems.some((item) => Math.abs(item.x - lane) < 1 && Math.abs(item.y - y) < 18));
+  const choices = safe.length ? safe : lanes;
+  return choices[Math.floor(Math.random() * choices.length)];
+}
+function spawnFallWave() {
+  const count = 2 + Math.floor(Math.random() * 2);
+  for (let index = 0; index < count; index += 1) spawnFallItem(true, -12 - index * 18);
+  engine.remaining = count;
+}
+function updateFallMode(now) {
+  if (!engine.gameActive) return;
+  const dt = Math.min(60, now - lastTick);
+  const speed = .012 + Math.min(.018, engine.targetsDone * .0008);
+  const spawnDelay = Math.max(320, 820 - engine.targetsDone * 38);
+  if (now - fallLastSpawn > spawnDelay) { spawnFallItem(false); fallLastSpawn = now; }
+  fallItems.forEach((item) => { item.y += dt * speed; });
+  const hitGround = fallItems.some((item) => item.number === engine.currentTarget && item.y >= 88);
+  fallItems = fallItems.filter((item) => item.y < 102);
+  engine.remaining = fallItems.filter((item) => item.number === engine.currentTarget).length;
+  if (hitGround) { engine.end('missed-target'); playFeedback('wrong'); showGameOver(); return; }
+  const layer = $('#fall-layer');
+  if (!layer) return;
+  const activeIds = new Set();
+  fallItems.forEach((item) => {
+    activeIds.add(item.id);
+    let cell = fallNodes.get(item.id);
+    if (!cell) {
+      cell = document.createElement('button');
+      cell.className = 'falling-number';
+      cell.textContent = item.number;
+      cell.dataset.fallId = String(item.id);
+      layer.append(cell);
+      fallNodes.set(item.id, cell);
+    }
+    cell.style.left = `${item.x}%`;
+    cell.style.top = `${item.y}%`;
+    cell.setAttribute('aria-label', t('game.fallItemAria', { value: item.number }));
+  });
+  fallNodes.forEach((cell, id) => { if (!activeIds.has(id)) { cell.remove(); fallNodes.delete(id); } });
+}
+function handleFallClick(id) {
+  const item = fallItems.find((entry) => entry.id === id);
+  if (!item || !engine.gameActive) return;
+  if (item.number !== engine.currentTarget) { engine.end('wrong'); playFeedback('wrong'); showGameOver(); return; }
+  const { points, multiplier } = engine.pointsAt(Date.now());
+  engine.score += points;
+  fallItems = fallItems.filter((entry) => entry.id !== id);
+  engine.remaining = fallItems.filter((entry) => entry.number === engine.currentTarget).length;
+  const outcome = engine.remaining === 0 ? engine.finishTarget() : { completedTarget: false };
+  playFeedback('correct');
+  if (engine.score > engine.bestScore) engine.bestScore = engine.score;
+  recordProgress(outcome);
+  showToast(`+${points}${multiplier > 1 ? ` ×${multiplier}` : ''}`);
+  renderHud();
+  renderProgress();
+  if (outcome.completedTarget) spawnFallWave();
+}
+function renderHud() {
+  $('#target').textContent = engine.currentTarget;
+  $('#next').textContent = engine.queue[1] ?? '–';
+  $('#next2').textContent = engine.queue[2] ?? '–';
+  $('#remaining').textContent = engine.remaining;
+  $('#score').textContent = engine.score;
+  $('#best').textContent = engine.bestScore;
+  $('#level').textContent = engine.level;
+  $('#badges').textContent = engine.badges;
+  const modeLabel = $('#mode-label');
+  if (modeLabel) modeLabel.textContent = engine.mode === 'fall' ? t('game.modeFall', { speed: (1 + engine.targetsDone * .08).toFixed(1) }) : t('game.modeStandard');
+  $('#timer-panel').hidden = engine.mode === 'fall';
+  const pct = Math.max(0, engine.timeLeft / CONFIG.TIME_MAX * 100);
+  $('#time-fill').style.width = `${pct}%`;
+  $('#time-fill').classList.toggle('critical', pct <= 25 && !isFrozen());
+  $('#time-label').textContent = t(isFrozen() ? 'game.frozen' : 'game.time');
+  $('#forbidden-wrap').hidden = engine.forbiddenNum === null;
+  $('#forbidden').textContent = engine.forbiddenNum ?? '';
+  const combo = $('#combo');
+  combo.textContent = engine.combo >= 2 ? `${engine.combo >= 12 ? '🔥🔥' : engine.combo >= 6 ? '🔥' : ''} ${t('game.combo', { count: engine.combo, multiplier: Math.min(CONFIG.COMBO_CAP, 1 + Math.floor(engine.combo / 4)) })}` : '';
+}
+function isFrozen() { return Date.now() < engine.frozenUntil; }
+function render() { renderGrid(); renderHud(); }
+function showToast(message) {
+  const toast = $('#toast');
+  toast.textContent = message;
+  toast.classList.remove('show');
+  requestAnimationFrame(() => toast.classList.add('show'));
+}
+function handleClick(column, cell, row) {
+  const outcome = engine.click(column, Date.now(), row);
+  if (outcome.type === 'ignored') return;
+  if (outcome.type === 'gameover') {
+    playFeedback('wrong');
+    cell.classList.add('wrong');
+    renderHud();
+    clearTimeout(gameOverTimer);
+    gameOverTimer = setTimeout(showGameOver, 260);
+    return;
+  }
+  if (outcome.type === 'shield') {
+    playFeedback('freeze');
+    showToast(t('toast.shield'));
+    savePersistentState();
+    render();
+    return;
+  }
+  if (outcome.type === 'freeze') {
+    playFeedback('freeze');
+    showToast('❄️ +50');
+  } else {
+    playFeedback('correct');
+    showToast(`+${outcome.points}${outcome.multiplier > 1 ? ` ×${outcome.multiplier}` : ''}`);
+  }
+  if (engine.score > engine.bestScore) engine.bestScore = engine.score;
+  recordProgress(outcome);
+  render();
+  if (outcome.leveledUp) showToast(t('toast.levelUp', { level: engine.level }));
+}
+function gameLoop(now) {
+  if (engine.mode === 'fall') {
+    updateFallMode(now);
+    lastTick = now;
+    if (engine.gameActive) rafId = requestAnimationFrame(gameLoop);
+    return;
+  }
+  const result = engine.tick(Math.min(100, now - lastTick), Date.now());
+  lastTick = now;
+  renderHud();
+  if (result.type === 'gameover') { showGameOver(); return; }
+  if (engine.gameActive) rafId = requestAnimationFrame(gameLoop);
+}
+function startLoop() {
+  cancelAnimationFrame(rafId);
+  clearTimeout(gameOverTimer);
+  gameOverTimer = null;
+  lastTick = performance.now();
+  rafId = requestAnimationFrame(gameLoop);
+}
+function showGameOver() {
+  if (engine.gameActive) return;
+  cancelAnimationFrame(rafId);
+  clearTimeout(gameOverTimer);
+  gameOverTimer = null;
+  $('#final-score').textContent = engine.score;
+  syncContinueButton();
+  $('#gameover').hidden = false;
+}
+function syncContinueButton() {
+  const button = $('#continue');
+  button.disabled = engine.badges === 0;
+  button.textContent = engine.badges ? t('over.continue', { count: engine.badges }) : t('over.continueNone');
+}
+function startGame() {
+  clearTimeout(gameOverTimer);
+  engine.start(chosenMode);
+  loadPersistentState();
+  engine.shieldCharges = inventory.shield;
+  inventory.shield = 0;
+  savePersistentState();
+  $('#home-screen').hidden = true;
+  $('#game-screen').hidden = false;
+  $('#gameover').hidden = true;
+  render();
+  renderProgress();
+  playFeedback('start');
+  startLoop();
+}
+function continueGame() {
+  if (!engine.continueGame()) return;
+  clearTimeout(gameOverTimer);
+  savePersistentState();
+  $('#gameover').hidden = true;
+  render();
+  renderProgress();
+  startLoop();
+}
+function goHome() {
+  cancelAnimationFrame(rafId);
+  clearTimeout(gameOverTimer);
+  engine.end('home');
+  $('#gameover').hidden = true;
+  $('#game-screen').hidden = true;
+  $('#home-screen').hidden = false;
+}
+function toggleSound() {
+  soundEnabled = !soundEnabled;
+  localStorage.setItem('numdrop_sound', String(soundEnabled));
+  syncSoundToggle();
+  if (soundEnabled) playFeedback('correct');
+}
+function buyPower(type) {
+  if (!['shield', 'scan', 'time'].includes(type) || engine.badges < 1) { showToast(t('toast.needBadge')); return; }
+  engine.badges -= 1;
+  inventory[type] += 1;
+  savePersistentState();
+  renderProgress();
+  showToast(t('toast.powerReady'));
+}
+function usePower(type) {
+  if (type === 'shield' || !engine.gameActive || !inventory[type]) return;
+  inventory[type] -= 1;
+  engine.usePowerup(type);
+  savePersistentState();
+  render();
+  renderProgress();
+  showToast(t(type === 'scan' ? 'toast.scan' : 'toast.timeBoost'));
+}
+function selectMode(mode) {
+  chosenMode = mode === 'fall' ? 'fall' : 'standard';
+  document.querySelectorAll('[data-mode]').forEach((button) => button.classList.toggle('selected', button.dataset.mode === chosenMode));
+  $('#mode-description').textContent = t(chosenMode === 'fall' ? 'mode.fallDesc' : 'mode.standardDesc');
+}
+function syncLangToggle() {
+  const control = $('#lang-toggle');
+  if (control) control.textContent = getLang().toUpperCase();
+}
+function cycleLang() {
+  setLang(nextLang());
+  syncLangToggle();
+  syncSoundToggle();
+  selectMode(chosenMode);
+  syncContinueButton();
+  renderProgress();
+  if (engine.gameActive) renderHud();
+}
+window.startNumDrop = startGame;
+window.restartNumDrop = startGame;
+window.continueNumDrop = continueGame;
+window.toggleNumDropSound = toggleSound;
+window.goNumDropHome = goHome;
+window.buyNumDropPower = buyPower;
+window.useNumDropPower = usePower;
+window.selectNumDropMode = selectMode;
+window.cycleNumbooLang = cycleLang;
+document.addEventListener('click', (event) => {
+  if (event.target.closest('[onclick]')) return;
+  const action = event.target.closest('[data-action]')?.dataset.action;
+  if (action === 'start' || action === 'restart') startGame();
+  if (action === 'continue') continueGame();
+  if (action === 'sound') toggleSound();
+  if (action === 'home') goHome();
+  if (action === 'buy') buyPower(event.target.closest('[data-type]')?.dataset.type);
+  if (action === 'power') usePower(event.target.closest('[data-power]')?.dataset.power);
+  if (action === 'mode') selectMode(event.target.closest('[data-mode]')?.dataset.mode);
+  if (action === 'lang') cycleLang();
+});
+loadPersistentState();
+initLang();
+syncLangToggle();
+syncSoundToggle();
+engine.gameActive = false;
+render();
+renderProgress();
+selectMode(chosenMode);
