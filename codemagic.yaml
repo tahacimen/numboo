@@ -22,7 +22,8 @@ workflows:
           npm install --prefix "$HOME/.numboo-pnpm" pnpm@11.16.0
           "$HOME/.numboo-pnpm/node_modules/.bin/pnpm" install --frozen-lockfile
       - name: Build web app and sync the iOS project
-        script: "$HOME/.numboo-pnpm/node_modules/.bin/pnpm" run ios:sync
+        script: |
+          "$HOME/.numboo-pnpm/node_modules/.bin/pnpm" run ios:sync
       - name: Set a unique iOS build number
         script: |
           cd "$CM_BUILD_DIR/ios/App"
