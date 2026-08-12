@@ -379,3 +379,15 @@ engine.gameActive = false;
 render();
 renderProgress();
 selectMode(chosenMode);
+
+// Optional launch parameters are useful for automated device previews and do
+// not affect the normal app launch flow.
+const previewParams = new URLSearchParams(window.location.search);
+const previewLanguage = previewParams.get('lang');
+if (previewLanguage === 'en' || previewLanguage === 'tr') {
+  setLang(previewLanguage);
+  syncLangToggle();
+}
+const previewMode = previewParams.get('mode');
+if (previewMode === 'standard' || previewMode === 'fall') selectMode(previewMode);
+if (previewParams.get('autostart') === '1') setTimeout(startGame, 0);
